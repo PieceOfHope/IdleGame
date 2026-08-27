@@ -35,6 +35,8 @@ function createDefaultCombatState() {
     dotDamagePerSec: 0,
     monsterNextHitReductionPct: 0,
     pendingHeal: 0,
+    extraEnemies: [],
+    enemySpawnElapsedMs: 0,
   };
 }
 
@@ -139,6 +141,16 @@ function normalizeState(data) {
     state.combat.dotDamagePerSec = Number(savedCombat.dotDamagePerSec) || 0;
     state.combat.monsterNextHitReductionPct = Number(savedCombat.monsterNextHitReductionPct) || 0;
     state.combat.pendingHeal = Number(savedCombat.pendingHeal) || 0;
+    state.combat.extraEnemies = Array.isArray(savedCombat.extraEnemies)
+      ? savedCombat.extraEnemies
+          .filter((enemy) => enemy && Number.isFinite(enemy.level) && enemy.level >= 1 && Number.isFinite(enemy.currentHp))
+          .map((enemy) => ({
+            level: Math.floor(enemy.level),
+            currentHp: enemy.currentHp,
+            attackElapsedMs: Number(enemy.attackElapsedMs) || 0,
+          }))
+      : [];
+    state.combat.enemySpawnElapsedMs = Number(savedCombat.enemySpawnElapsedMs) || 0;
   }
 
   if (data.settings && typeof data.settings === 'object') {

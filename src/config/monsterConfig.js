@@ -6,6 +6,9 @@ export const MONSTER_BALANCE = {
   hpGrowth: 1.12,
   attackGrowth: 1.1,
   goldGrowth: 1.08,
+  // 처치가 늦어지면 몬스터가 옆에 쌓이는 간격/최대 동시 등장 수 (Document/GameBalance.md 참고).
+  stackSpawnIntervalMs: 6000,
+  maxActiveCount: 3,
 };
 
 export function getMonsterForLevel(level) {

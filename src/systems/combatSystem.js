@@ -1,4 +1,4 @@
-import { getMonsterForLevel } from '../config/monsterConfig.js';
+import { getMonsterForLevel, MONSTER_BALANCE } from '../config/monsterConfig.js';
 import { MASTERY_CONFIG } from '../config/masteryConfig.js';
 import { RETREAT_DURATION_MS } from '../config/characterConfig.js';
 import { getDerivedStats, getPhysicalDamage, getMagicDamage, addStatUsage } from './characterSystem.js';
@@ -92,6 +92,8 @@ export function setFarmingMode(state, enabled) {
   combat.monsterAttackElapsedMs = 0;
   combat.dotRemainingMs = 0;
   combat.dotDamagePerSec = 0;
+  combat.extraEnemies = [];
+  combat.enemySpawnElapsedMs = 0;
 }
 
 export function getMonsterSnapshot(state) {
@@ -122,6 +124,30 @@ export function getExpectedPlayerDps(state) {
   return expectedDamagePerHit * (1000 / attackIntervalMs) + extraDps;
 }
 
+// 맨 앞 몬스터가 처치된 뒤 다음 몬스터를 배치한다. 뒤에 쌓여있던 몬스터(extraEnemies)가 있으면
+// 그 몬스터를 그대로 앞으로 승격시키고, 없으면 새로 스폰한다.
+function promoteNextEnemy(state) {
+  const combat = state.combat;
+  if (!combat.farmingMode) {
+    combat.monsterLevel += 1;
+    if (combat.monsterLevel > combat.highestMonsterLevel) {
+      combat.highestMonsterLevel = combat.monsterLevel;
+    }
+  }
+
+  const next = combat.extraEnemies.shift();
+  if (next) {
+    combat.monsterLevel = next.level;
+    combat.monsterCurrentHp = next.currentHp;
+    combat.monsterAttackElapsedMs = next.attackElapsedMs;
+  } else {
+    combat.monsterCurrentHp = getMonsterForLevel(combat.monsterLevel).maxHp;
+    combat.monsterAttackElapsedMs = 0;
+  }
+  combat.dotRemainingMs = 0;
+  combat.dotDamagePerSec = 0;
+}
+
 // 몬스터에게 데미지를 적용하고, 처치 시 골드 지급 및 다음 전개(파밍/진행)를 처리한다.
 // 플레이어의 직접 공격과 화상(DoT) 틱이 공유하는 처치 판정 로직.
 function damageMonster(state, damage, onEvent) {
@@ -133,16 +159,7 @@ function damageMonster(state, damage, onEvent) {
   addResource(state, 'gold', defeatedMonster.goldReward);
   onEvent({ type: 'monster-defeated', level: combat.monsterLevel, reward: defeatedMonster.goldReward });
 
-  if (!combat.farmingMode) {
-    combat.monsterLevel += 1;
-    if (combat.monsterLevel > combat.highestMonsterLevel) {
-      combat.highestMonsterLevel = combat.monsterLevel;
-    }
-  }
-  combat.monsterCurrentHp = getMonsterForLevel(combat.monsterLevel).maxHp;
-  combat.monsterAttackElapsedMs = 0;
-  combat.dotRemainingMs = 0;
-  combat.dotDamagePerSec = 0;
+  promoteNextEnemy(state);
 }
 
 export function advanceCombat(state, dtMs, onEvent = () => {}) {
@@ -157,6 +174,8 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
       combat.retreatRemainingMs = 0;
       combat.playerAttackElapsedMs = 0;
       combat.monsterAttackElapsedMs = 0;
+      combat.enemySpawnElapsedMs = 0;
+      for (const enemy of combat.extraEnemies) enemy.attackElapsedMs = 0;
       onEvent({ type: 'retreat-end' });
     }
     return;
@@ -215,6 +234,42 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
       combat.isRetreating = true;
       combat.retreatRemainingMs = RETREAT_DURATION_MS;
       onEvent({ type: 'player-retreat' });
+    }
+  }
+
+  // 뒤에 쌓여있는 몬스터들도 각자의 타이밍으로 플레이어를 공격한다 - 처치가 늦어질수록 다:1로 두들겨 맞는다.
+  for (const enemy of combat.extraEnemies) {
+    if (combat.isRetreating) break;
+
+    const enemyDef = getMonsterForLevel(enemy.level);
+    enemy.attackElapsedMs += dtMs;
+    if (enemy.attackElapsedMs < enemyDef.attackIntervalMs) continue;
+    enemy.attackElapsedMs -= enemyDef.attackIntervalMs;
+
+    combat.playerCurrentHp -= enemyDef.attackDamage;
+    addStatUsage(state, 'vit', 1);
+    onEvent({ type: 'monster-attack', damage: enemyDef.attackDamage });
+
+    if (combat.playerCurrentHp <= 0) {
+      combat.playerCurrentHp = derived.maxHp;
+      combat.isRetreating = true;
+      combat.retreatRemainingMs = RETREAT_DURATION_MS;
+      onEvent({ type: 'player-retreat' });
+    }
+  }
+
+  // 처치 속도가 스폰 속도를 못 따라가면 몬스터가 옆으로 쌓인다 (최대 동시 등장 수까지).
+  if (1 + combat.extraEnemies.length < MONSTER_BALANCE.maxActiveCount) {
+    combat.enemySpawnElapsedMs += dtMs;
+    if (combat.enemySpawnElapsedMs >= MONSTER_BALANCE.stackSpawnIntervalMs) {
+      combat.enemySpawnElapsedMs -= MONSTER_BALANCE.stackSpawnIntervalMs;
+      const spawnLevel = combat.monsterLevel;
+      combat.extraEnemies.push({
+        level: spawnLevel,
+        currentHp: getMonsterForLevel(spawnLevel).maxHp,
+        attackElapsedMs: 0,
+      });
+      onEvent({ type: 'enemy-stacked', level: spawnLevel });
     }
   }
 }

@@ -46,19 +46,58 @@ export function initRenderer(container, {
         <div class="resource-panel__label">골드</div>
       </section>
 
-      <section class="combat-panel">
-        <div class="combat-entity">
-          <div class="combat-entity__name" id="monster-name">몬스터 Lv.1</div>
-          <div class="hp-bar"><div class="hp-bar__fill hp-bar__fill--monster" id="monster-hp-fill"></div></div>
-          <div class="hp-bar__text" id="monster-hp-text">0 / 0</div>
+      <section class="battle-screen">
+        <div class="stage-bar">
+          <div class="stage-label" id="stage-label">몬스터 Lv.1</div>
+          <div class="stage-progress">
+            <div class="stage-progress__line"></div>
+            <div class="stage-progress__checkpoint"></div>
+            <div class="stage-progress__checkpoint"></div>
+            <div class="stage-progress__checkpoint stage-progress__checkpoint--current"></div>
+          </div>
         </div>
-        <div class="combat-entity">
-          <div class="combat-entity__name">플레이어</div>
-          <div class="hp-bar"><div class="hp-bar__fill hp-bar__fill--player" id="player-hp-fill"></div></div>
-          <div class="hp-bar__text" id="player-hp-text">0 / 0</div>
+
+        <div class="battlefield" id="battlefield">
+          <div class="unit unit--ally" style="left:18%">
+            <div class="unit__hp"><div class="unit__hp-fill" style="width:100%"></div></div>
+            <div class="unit__sprite unit__sprite--aura">🧙</div>
+            <div class="unit__label">아군</div>
+          </div>
+
+          <div class="unit unit--player" style="left:36%">
+            <div class="unit__hp"><div class="unit__hp-fill" id="player-hp-fill"></div></div>
+            <div class="unit__sprite">🥷</div>
+            <div class="unit__label">플레이어</div>
+          </div>
+
+          <div class="unit unit--enemy" id="enemy-slot-0" style="left:66%">
+            <div class="unit__hp"><div class="unit__hp-fill" id="monster-hp-fill"></div></div>
+            <div class="unit__sprite">👹</div>
+            <div class="unit__label">몬스터</div>
+          </div>
+
+          <div class="unit unit--enemy" id="enemy-slot-1" style="left:79%" hidden>
+            <div class="unit__hp"><div class="unit__hp-fill" style="width:100%"></div></div>
+            <div class="unit__sprite">👹</div>
+            <div class="unit__label">몬스터</div>
+          </div>
+
+          <div class="unit unit--enemy" id="enemy-slot-2" style="left:92%" hidden>
+            <div class="unit__hp"><div class="unit__hp-fill" style="width:100%"></div></div>
+            <div class="unit__sprite">👹</div>
+            <div class="unit__label">몬스터</div>
+          </div>
         </div>
+
         <div class="retreat-banner" id="retreat-banner" hidden>후퇴 중... 체력을 회복하고 있습니다</div>
-        <button type="button" class="farming-toggle-btn" id="farming-toggle-btn">파밍 모드 켜기</button>
+
+        <footer class="control-bar">
+          <button type="button" class="ctrl-btn ctrl-btn--auto" id="farming-toggle-btn">자동<br>꺼짐</button>
+          <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🔥</button>
+          <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🛡️</button>
+          <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🏹</button>
+        </footer>
+
         <ul class="combat-log" id="combat-log"></ul>
       </section>
 
@@ -90,11 +129,10 @@ export function initRenderer(container, {
 
   const refs = {
     amountEl: container.querySelector('#resource-amount'),
-    monsterNameEl: container.querySelector('#monster-name'),
+    stageLabelEl: container.querySelector('#stage-label'),
     monsterHpFillEl: container.querySelector('#monster-hp-fill'),
-    monsterHpTextEl: container.querySelector('#monster-hp-text'),
     playerHpFillEl: container.querySelector('#player-hp-fill'),
-    playerHpTextEl: container.querySelector('#player-hp-text'),
+    extraEnemySlotEls: [container.querySelector('#enemy-slot-1'), container.querySelector('#enemy-slot-2')],
     retreatBannerEl: container.querySelector('#retreat-banner'),
     farmingToggleBtn: container.querySelector('#farming-toggle-btn'),
     combatLogEl: container.querySelector('#combat-log'),
@@ -106,6 +144,10 @@ export function initRenderer(container, {
   };
 
   refs.farmingToggleBtn.addEventListener('click', onFarmingToggle);
+
+  container.querySelectorAll('.ctrl-btn--skill[data-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => btn.classList.toggle('is-active'));
+  });
 
   container.querySelector('#export-btn').addEventListener('click', onExport);
   container.querySelector('#import-btn').addEventListener('click', onImport);
@@ -249,26 +291,29 @@ export function renderCombatState(refs, state) {
   const monster = getMonsterSnapshot(state);
   const derived = getDerivedStats(state);
 
-  const nameText = `${monster.name}`;
-  if (refs.monsterNameEl.textContent !== nameText) refs.monsterNameEl.textContent = nameText;
+  const isFarming = state.combat.farmingMode;
+  const stageLabelText = isFarming
+    ? `몬스터 Lv.${state.combat.monsterLevel} · 파밍 중`
+    : `몬스터 Lv.${state.combat.monsterLevel}`;
+  if (refs.stageLabelEl.textContent !== stageLabelText) refs.stageLabelEl.textContent = stageLabelText;
 
   const monsterHp = Math.max(0, state.combat.monsterCurrentHp);
   const monsterHpPct = Math.max(0, Math.min(100, (monsterHp / monster.maxHp) * 100));
   refs.monsterHpFillEl.style.width = `${monsterHpPct}%`;
-  refs.monsterHpTextEl.textContent = `${Math.ceil(monsterHp)} / ${monster.maxHp}`;
 
   const playerHp = Math.max(0, state.combat.playerCurrentHp);
   const playerHpPct = Math.max(0, Math.min(100, (playerHp / derived.maxHp) * 100));
   refs.playerHpFillEl.style.width = `${playerHpPct}%`;
-  refs.playerHpTextEl.textContent = `${Math.ceil(playerHp)} / ${Math.round(derived.maxHp)}`;
+
+  const extraCount = state.combat.extraEnemies.length;
+  refs.extraEnemySlotEls.forEach((el, i) => {
+    el.hidden = i >= extraCount;
+  });
 
   refs.retreatBannerEl.hidden = !state.combat.isRetreating;
 
-  const isFarming = state.combat.farmingMode;
   refs.farmingToggleBtn.classList.toggle('is-active', isFarming);
-  refs.farmingToggleBtn.textContent = isFarming
-    ? `파밍 모드 끄기 (Lv.${state.combat.monsterLevel} 반복)`
-    : '파밍 모드 켜기';
+  refs.farmingToggleBtn.innerHTML = isFarming ? '자동<br>켜짐' : '자동<br>꺼짐';
 
   for (const [styleId, btn] of refs.styleButtons) {
     btn.classList.toggle('is-active', styleId === state.combat.activeStyleId);

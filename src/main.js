@@ -59,6 +59,9 @@ function handleCombatEvent(event) {
     case 'monster-weakened':
       pushCombatLog('몬스터를 약화시켰습니다!');
       break;
+    case 'enemy-stacked':
+      pushCombatLog(`몬스터 Lv.${event.level}가 추가로 나타났습니다!`);
+      break;
   }
 }
 
