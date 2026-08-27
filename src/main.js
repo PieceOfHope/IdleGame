@@ -46,7 +46,7 @@ function handleCombatEvent(event) {
       battlefield.triggerDefeat('enemy0', event.reward);
       break;
     case 'monster-attack':
-      pushCombatLog(`몬스터의 반격! ${event.damage} 데미지`);
+      pushCombatLog(`몬스터의 반격! ${Math.ceil(event.damage)} 데미지`);
       battlefield.triggerHit('player');
       break;
     case 'player-retreat':
@@ -189,7 +189,9 @@ const refs = Renderer.initRenderer(appRoot, {
   onPermanentPurchase: (upgradeId) => {
     const upgradeDef = PERMANENT_UPGRADE_CONFIG.find((u) => u.id === upgradeId);
     if (!upgradeDef) return;
-    if (!PermanentUpgradeSystem.isPermanentUpgradeUnlocked(upgradeDef, getCharacterLevel(state))) return;
+
+    const characterLevel = getCharacterLevel(state);
+    if (!PermanentUpgradeSystem.isPermanentUpgradeUnlocked(upgradeDef, characterLevel)) return;
 
     const level = PermanentUpgradeSystem.getPermanentUpgradeLevel(state, upgradeDef.id);
     const goldAmount = state.resources.gold.amount;
@@ -198,7 +200,7 @@ const refs = Renderer.initRenderer(appRoot, {
       : permanentBuyQuantity;
 
     if (quantity <= 0) return;
-    PermanentUpgradeSystem.purchasePermanentUpgrade(state, upgradeDef, quantity);
+    PermanentUpgradeSystem.purchasePermanentUpgrade(state, upgradeDef, quantity, characterLevel);
   },
   onPermanentBuyQuantityChange: (qty) => {
     permanentBuyQuantity = qty;

@@ -4,10 +4,6 @@ export function isUnlocked(state, upgradeDef) {
   return (state.upgrades[id]?.level ?? 0) >= level;
 }
 
-export function getSingleCost(upgradeDef, level) {
-  return upgradeDef.baseCost * Math.pow(upgradeDef.costMultiplier, level);
-}
-
 export function getBulkCost(upgradeDef, level, quantity) {
   if (quantity <= 0) return 0;
   const { baseCost, costMultiplier } = upgradeDef;

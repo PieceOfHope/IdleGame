@@ -60,12 +60,6 @@ export function initRenderer(container, {
       <section class="battle-screen">
         <div class="stage-bar">
           <div class="stage-label" id="stage-label">몬스터 Lv.1</div>
-          <div class="stage-progress">
-            <div class="stage-progress__line"></div>
-            <div class="stage-progress__checkpoint"></div>
-            <div class="stage-progress__checkpoint"></div>
-            <div class="stage-progress__checkpoint stage-progress__checkpoint--current"></div>
-          </div>
         </div>
 
         <div class="battlefield" id="battlefield">
@@ -163,6 +157,7 @@ export function initRenderer(container, {
     statRows: new Map(),
     masteryRows: new Map(),
     legacy: null,
+    lastRenderedCombatState: {},
   };
 
   refs.farmingToggleBtn.addEventListener('click', onFarmingToggle);
@@ -311,19 +306,30 @@ export function renderResourceAmount(refs, state, primaryResourceId) {
 }
 
 export function renderCombatState(refs, state) {
+  const cache = refs.lastRenderedCombatState;
   const isFarming = state.combat.farmingMode;
+
   const stageLabelText = isFarming
     ? `몬스터 Lv.${state.combat.monsterLevel} · 파밍 중`
     : `몬스터 Lv.${state.combat.monsterLevel}`;
   if (refs.stageLabelEl.textContent !== stageLabelText) refs.stageLabelEl.textContent = stageLabelText;
 
-  refs.retreatBannerEl.hidden = !state.combat.isRetreating;
+  if (cache.isRetreating !== state.combat.isRetreating) {
+    refs.retreatBannerEl.hidden = !state.combat.isRetreating;
+    cache.isRetreating = state.combat.isRetreating;
+  }
 
-  refs.farmingToggleBtn.classList.toggle('is-active', isFarming);
-  refs.farmingToggleBtn.innerHTML = isFarming ? '자동<br>켜짐' : '자동<br>꺼짐';
+  if (cache.isFarming !== isFarming) {
+    refs.farmingToggleBtn.classList.toggle('is-active', isFarming);
+    refs.farmingToggleBtn.innerHTML = isFarming ? '자동<br>켜짐' : '자동<br>꺼짐';
+    cache.isFarming = isFarming;
+  }
 
-  for (const [masteryId, rowRefs] of refs.masteryRows) {
-    rowRefs.root.classList.toggle('is-active', masteryId === state.combat.activeStyleId);
+  if (cache.activeStyleId !== state.combat.activeStyleId) {
+    for (const [masteryId, rowRefs] of refs.masteryRows) {
+      rowRefs.root.classList.toggle('is-active', masteryId === state.combat.activeStyleId);
+    }
+    cache.activeStyleId = state.combat.activeStyleId;
   }
 }
 
@@ -364,13 +370,17 @@ export function renderCharacterLevel(refs, state) {
   }
 }
 
+function setTextIfChanged(el, text) {
+  if (el.textContent !== text) el.textContent = text;
+}
+
 export function renderDerivedStats(refs, state) {
   const preview = getStatPreview(state);
-  refs.derivedPhysicalEl.textContent = formatNumber(preview.physicalDamage);
-  refs.derivedMagicEl.textContent = formatNumber(preview.magicDamage);
-  refs.derivedAttackSpeedEl.textContent = `${preview.attacksPerSec.toFixed(2)}/초`;
-  refs.derivedMaxHpEl.textContent = formatNumber(preview.maxHp);
-  refs.derivedRegenEl.textContent = `${preview.hpRegenPerSec.toFixed(2)}/초`;
+  setTextIfChanged(refs.derivedPhysicalEl, formatNumber(preview.physicalDamage));
+  setTextIfChanged(refs.derivedMagicEl, formatNumber(preview.magicDamage));
+  setTextIfChanged(refs.derivedAttackSpeedEl, `${preview.attacksPerSec.toFixed(2)}/초`);
+  setTextIfChanged(refs.derivedMaxHpEl, formatNumber(preview.maxHp));
+  setTextIfChanged(refs.derivedRegenEl, `${preview.hpRegenPerSec.toFixed(2)}/초`);
 }
 
 export function renderStatPanel(refs, state, statConfig) {

@@ -1,4 +1,5 @@
 import { RESOURCE_CONFIG } from '../config/resources.js';
+import { UPGRADE_CONFIG } from '../config/upgrades.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import { STAT_CONFIG, CHARACTER_BALANCE } from '../config/characterConfig.js';
 import { MASTERY_CONFIG } from '../config/masteryConfig.js';
@@ -92,8 +93,9 @@ function normalizeState(data) {
   }
 
   if (data.upgrades && typeof data.upgrades === 'object') {
-    for (const [upgradeId, upgradeData] of Object.entries(data.upgrades)) {
-      state.upgrades[upgradeId] = { level: Number(upgradeData?.level) || 0 };
+    for (const upgradeDef of UPGRADE_CONFIG) {
+      const saved = data.upgrades[upgradeDef.id];
+      if (saved) state.upgrades[upgradeDef.id] = { level: Number(saved.level) || 0 };
     }
   }
 

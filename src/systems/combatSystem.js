@@ -175,6 +175,22 @@ function damageMonster(state, damage, onEvent) {
   promoteNextEnemy(state);
 }
 
+// 몬스터(맨 앞이든 스택이든)의 공격을 플레이어에게 적용하고, 체력이 다하면 후퇴시킨다.
+// 앞 몬스터 전용 처리(약화 감소율 적용)는 호출측에서 damage를 계산한 뒤 넘긴다.
+function applyDamageToPlayer(state, derived, damage, onEvent) {
+  const combat = state.combat;
+  combat.playerCurrentHp -= damage;
+  onEvent({ type: 'monster-attack', damage });
+
+  if (combat.playerCurrentHp <= 0) {
+    // 후퇴하며 즉시 최대 체력으로 회복 - 전투는 retreatRemainingMs 동안만 멈춘다 (진행도 손실 없음).
+    combat.playerCurrentHp = derived.maxHp;
+    combat.isRetreating = true;
+    combat.retreatRemainingMs = RETREAT_DURATION_MS;
+    onEvent({ type: 'player-retreat' });
+  }
+}
+
 export function advanceCombat(state, dtMs, onEvent = () => {}) {
   const combat = state.combat;
   const derived = getDerivedStats(state);
@@ -243,16 +259,7 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
       combat.monsterNextHitReductionPct = 0;
     }
 
-    combat.playerCurrentHp -= monsterDamage;
-    onEvent({ type: 'monster-attack', damage: monsterDamage });
-
-    if (combat.playerCurrentHp <= 0) {
-      // 후퇴하며 즉시 최대 체력으로 회복 - 전투는 retreatRemainingMs 동안만 멈춘다 (진행도 손실 없음).
-      combat.playerCurrentHp = derived.maxHp;
-      combat.isRetreating = true;
-      combat.retreatRemainingMs = RETREAT_DURATION_MS;
-      onEvent({ type: 'player-retreat' });
-    }
+    applyDamageToPlayer(state, derived, monsterDamage, onEvent);
   }
 
   // 뒤에 쌓여있는 몬스터들도 각자의 타이밍으로 플레이어를 공격한다 - 처치가 늦어질수록 다:1로 두들겨 맞는다.
@@ -264,15 +271,7 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
     if (enemy.attackElapsedMs < enemyDef.attackIntervalMs) continue;
     enemy.attackElapsedMs -= enemyDef.attackIntervalMs;
 
-    combat.playerCurrentHp -= enemyDef.attackDamage;
-    onEvent({ type: 'monster-attack', damage: enemyDef.attackDamage });
-
-    if (combat.playerCurrentHp <= 0) {
-      combat.playerCurrentHp = derived.maxHp;
-      combat.isRetreating = true;
-      combat.retreatRemainingMs = RETREAT_DURATION_MS;
-      onEvent({ type: 'player-retreat' });
-    }
+    applyDamageToPlayer(state, derived, enemyDef.attackDamage, onEvent);
   }
 
   // 처치 속도가 스폰 속도를 못 따라가면 몬스터가 옆으로 쌓인다 (최대 동시 등장 수까지).

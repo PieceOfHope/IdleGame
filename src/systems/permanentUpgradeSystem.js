@@ -13,14 +13,18 @@ export function isPermanentUpgradeUnlocked(upgradeDef, characterLevel) {
   return characterLevel >= (upgradeDef.requiresLevel ?? 0);
 }
 
-export function purchasePermanentUpgrade(state, upgradeDef, quantity) {
-  const level = getPermanentUpgradeLevel(state, upgradeDef.id);
-  const cost = getBulkCost(upgradeDef, level, quantity);
-  const gold = state.resources.gold;
-  if (!gold || quantity <= 0 || gold.amount < cost) {
+export function purchasePermanentUpgrade(state, upgradeDef, quantity, characterLevel) {
+  if (!isPermanentUpgradeUnlocked(upgradeDef, characterLevel)) {
     return { success: false };
   }
-  gold.amount -= cost;
+
+  const level = getPermanentUpgradeLevel(state, upgradeDef.id);
+  const cost = getBulkCost(upgradeDef, level, quantity);
+  const resource = state.resources[upgradeDef.resourceId ?? 'gold'];
+  if (!resource || quantity <= 0 || resource.amount < cost) {
+    return { success: false };
+  }
+  resource.amount -= cost;
   state.permanentUpgrades[upgradeDef.id] = { level: level + quantity };
   return { success: true, newLevel: level + quantity, cost };
 }

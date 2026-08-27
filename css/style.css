@@ -249,41 +249,6 @@ body {
   margin-bottom: 10px;
 }
 
-.stage-progress {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 20px;
-  margin: 0 10px;
-}
-
-.stage-progress__line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 4px;
-  background: var(--color-stage);
-  transform: translateY(-50%);
-  border-radius: 2px;
-}
-
-.stage-progress__checkpoint {
-  position: relative;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--color-stage);
-  border: 2px solid var(--color-panel);
-}
-
-.stage-progress__checkpoint--current {
-  width: 26px;
-  height: 26px;
-  background: #bcdcff;
-}
-
 .battlefield {
   position: relative;
   min-height: 190px;
