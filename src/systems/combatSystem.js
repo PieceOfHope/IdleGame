@@ -2,18 +2,81 @@ import { getMonsterForLevel } from '../config/monsterConfig.js';
 import { MASTERY_CONFIG } from '../config/masteryConfig.js';
 import { RETREAT_DURATION_MS } from '../config/characterConfig.js';
 import { getDerivedStats, getPhysicalDamage, getMagicDamage, addStatUsage } from './characterSystem.js';
-import { getMasteryDamageMultiplier, addMasteryUsage } from './masterySystem.js';
+import { getMasteryDamageMultiplier, getMasteryLevel, addMasteryUsage } from './masterySystem.js';
 import { addResource } from './resourceSystem.js';
 
 function getActiveStyleDef(state) {
   return MASTERY_CONFIG.find((m) => m.id === state.combat.activeStyleId) ?? MASTERY_CONFIG[0];
 }
 
-function getPlayerAttackDamage(state, styleDef) {
+function getBaseAttackDamage(state, styleDef) {
   const masteryMultiplier = getMasteryDamageMultiplier(state, styleDef);
   return styleDef.category === 'physical'
     ? getPhysicalDamage(state, masteryMultiplier)
     : getMagicDamage(state, masteryMultiplier);
+}
+
+// 특성 적용 - 데미지에 직접 영향을 주는 것(관통/치명타)은 최종 데미지를 반환하고,
+// 그 외의 효과(기절/흡혈/화상/회복/약화)는 combat 상태에 부수효과로 기록한다.
+function applyStyleTrait(state, styleDef, damage, onEvent) {
+  const trait = styleDef.trait;
+  if (!trait) return damage;
+
+  const combat = state.combat;
+  const level = getMasteryLevel(state, styleDef.id);
+  const chance = trait.cap !== undefined ? Math.min(trait.cap, level * trait.coefficientPerLevel) : 0;
+
+  switch (trait.type) {
+    case 'critChance': {
+      if (Math.random() < chance) {
+        const bonusDamage = damage * (trait.critMultiplier - 1);
+        onEvent({ type: 'critical-hit', bonusDamage });
+        return damage + bonusDamage;
+      }
+      return damage;
+    }
+    case 'flatBonusDamage': {
+      return damage + level * trait.coefficientPerLevel;
+    }
+    case 'stunChance': {
+      if (Math.random() < chance) {
+        const monster = getMonsterForLevel(combat.monsterLevel);
+        combat.monsterAttackElapsedMs -= monster.attackIntervalMs;
+        onEvent({ type: 'monster-stunned' });
+      }
+      return damage;
+    }
+    case 'weakenChance': {
+      if (Math.random() < chance) {
+        combat.monsterNextHitReductionPct = trait.reductionPct;
+        onEvent({ type: 'monster-weakened' });
+      }
+      return damage;
+    }
+    case 'lifesteal': {
+      combat.pendingHeal += damage * chance;
+      return damage;
+    }
+    case 'directHeal': {
+      combat.pendingHeal += level * trait.coefficientPerLevel;
+      return damage;
+    }
+    case 'burnDot': {
+      combat.dotRemainingMs = trait.durationMs;
+      combat.dotDamagePerSec = level * trait.coefficientPerLevel;
+      return damage;
+    }
+    default:
+      return damage;
+  }
+}
+
+function getAttackIntervalMs(state, styleDef, derived) {
+  const trait = styleDef.trait;
+  if (!trait || trait.type !== 'attackSpeed') return derived.attackIntervalMs;
+  const level = getMasteryLevel(state, styleDef.id);
+  const reduction = Math.min(trait.cap, level * trait.coefficientPerLevel);
+  return derived.attackIntervalMs * (1 - reduction);
 }
 
 export function setActiveStyle(state, styleId) {
@@ -21,8 +84,65 @@ export function setActiveStyle(state, styleId) {
   state.combat.activeStyleId = styleId;
 }
 
+export function setFarmingMode(state, enabled) {
+  const combat = state.combat;
+  combat.farmingMode = enabled;
+  combat.monsterLevel = enabled ? Math.max(1, combat.highestMonsterLevel - 1) : combat.highestMonsterLevel;
+  combat.monsterCurrentHp = getMonsterForLevel(combat.monsterLevel).maxHp;
+  combat.monsterAttackElapsedMs = 0;
+  combat.dotRemainingMs = 0;
+  combat.dotDamagePerSec = 0;
+}
+
 export function getMonsterSnapshot(state) {
   return getMonsterForLevel(state.combat.monsterLevel);
+}
+
+// 오프라인 정산(DPS 기반)에 사용하는 기대 초당 데미지. 확률형 특성(치명타)은 기대값으로,
+// 화상은 "계속 갱신되어 상시 적용된다"고 가정한 근사치로 반영한다.
+export function getExpectedPlayerDps(state) {
+  const styleDef = getActiveStyleDef(state);
+  const derived = getDerivedStats(state);
+  const attackIntervalMs = getAttackIntervalMs(state, styleDef, derived);
+  const baseDamage = getBaseAttackDamage(state, styleDef);
+  const level = getMasteryLevel(state, styleDef.id);
+  const trait = styleDef.trait;
+
+  let expectedDamagePerHit = baseDamage;
+  let extraDps = 0;
+  if (trait?.type === 'flatBonusDamage') {
+    expectedDamagePerHit += level * trait.coefficientPerLevel;
+  } else if (trait?.type === 'critChance') {
+    const chance = Math.min(trait.cap, level * trait.coefficientPerLevel);
+    expectedDamagePerHit += baseDamage * chance * (trait.critMultiplier - 1);
+  } else if (trait?.type === 'burnDot') {
+    extraDps += level * trait.coefficientPerLevel;
+  }
+
+  return expectedDamagePerHit * (1000 / attackIntervalMs) + extraDps;
+}
+
+// 몬스터에게 데미지를 적용하고, 처치 시 골드 지급 및 다음 전개(파밍/진행)를 처리한다.
+// 플레이어의 직접 공격과 화상(DoT) 틱이 공유하는 처치 판정 로직.
+function damageMonster(state, damage, onEvent) {
+  const combat = state.combat;
+  combat.monsterCurrentHp -= damage;
+  if (combat.monsterCurrentHp > 0) return;
+
+  const defeatedMonster = getMonsterForLevel(combat.monsterLevel);
+  addResource(state, 'gold', defeatedMonster.goldReward);
+  onEvent({ type: 'monster-defeated', level: combat.monsterLevel, reward: defeatedMonster.goldReward });
+
+  if (!combat.farmingMode) {
+    combat.monsterLevel += 1;
+    if (combat.monsterLevel > combat.highestMonsterLevel) {
+      combat.highestMonsterLevel = combat.monsterLevel;
+    }
+  }
+  combat.monsterCurrentHp = getMonsterForLevel(combat.monsterLevel).maxHp;
+  combat.monsterAttackElapsedMs = 0;
+  combat.dotRemainingMs = 0;
+  combat.dotDamagePerSec = 0;
 }
 
 export function advanceCombat(state, dtMs, onEvent = () => {}) {
@@ -47,29 +167,31 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
     addStatUsage(state, 'recovery', dtSeconds);
   }
 
+  if (combat.dotRemainingMs > 0) {
+    damageMonster(state, combat.dotDamagePerSec * dtSeconds, onEvent);
+    combat.dotRemainingMs = Math.max(0, combat.dotRemainingMs - dtMs);
+  }
+
   const styleDef = getActiveStyleDef(state);
+  const attackIntervalMs = getAttackIntervalMs(state, styleDef, derived);
 
   combat.playerAttackElapsedMs += dtMs;
-  if (combat.playerAttackElapsedMs >= derived.attackIntervalMs) {
-    combat.playerAttackElapsedMs -= derived.attackIntervalMs;
+  if (combat.playerAttackElapsedMs >= attackIntervalMs) {
+    combat.playerAttackElapsedMs -= attackIntervalMs;
 
-    const damage = getPlayerAttackDamage(state, styleDef);
-    combat.monsterCurrentHp -= damage;
+    const baseDamage = getBaseAttackDamage(state, styleDef);
+    const finalDamage = applyStyleTrait(state, styleDef, baseDamage, onEvent);
     addMasteryUsage(state, styleDef.id, 1);
     addStatUsage(state, styleDef.category === 'physical' ? 'str' : 'int', 1);
     addStatUsage(state, 'agi', 1);
-    onEvent({ type: 'player-attack', damage, styleId: styleDef.id });
+    onEvent({ type: 'player-attack', damage: finalDamage, styleId: styleDef.id });
 
-    if (combat.monsterCurrentHp <= 0) {
-      const defeatedMonster = getMonsterForLevel(combat.monsterLevel);
-      addResource(state, 'gold', defeatedMonster.goldReward);
-      onEvent({ type: 'monster-defeated', level: combat.monsterLevel, reward: defeatedMonster.goldReward });
+    damageMonster(state, finalDamage, onEvent);
+  }
 
-      combat.monsterLevel += 1;
-      combat.monsterCurrentHp = getMonsterForLevel(combat.monsterLevel).maxHp;
-      combat.monsterAttackElapsedMs = 0;
-      return;
-    }
+  if (combat.pendingHeal > 0) {
+    combat.playerCurrentHp = Math.min(derived.maxHp, combat.playerCurrentHp + combat.pendingHeal);
+    combat.pendingHeal = 0;
   }
 
   const monster = getMonsterForLevel(combat.monsterLevel);
@@ -77,9 +199,15 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
   if (combat.monsterAttackElapsedMs >= monster.attackIntervalMs) {
     combat.monsterAttackElapsedMs -= monster.attackIntervalMs;
 
-    combat.playerCurrentHp -= monster.attackDamage;
+    let monsterDamage = monster.attackDamage;
+    if (combat.monsterNextHitReductionPct > 0) {
+      monsterDamage *= 1 - combat.monsterNextHitReductionPct;
+      combat.monsterNextHitReductionPct = 0;
+    }
+
+    combat.playerCurrentHp -= monsterDamage;
     addStatUsage(state, 'vit', 1);
-    onEvent({ type: 'monster-attack', damage: monster.attackDamage });
+    onEvent({ type: 'monster-attack', damage: monsterDamage });
 
     if (combat.playerCurrentHp <= 0) {
       // 후퇴하며 즉시 최대 체력으로 회복 - 전투는 retreatRemainingMs 동안만 멈춘다 (진행도 손실 없음).

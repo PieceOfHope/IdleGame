@@ -12,7 +12,8 @@ import * as ResourceSystem from './systems/resourceSystem.js';
 import * as UpgradeSystem from './systems/upgradeSystem.js';
 import * as PermanentUpgradeSystem from './systems/permanentUpgradeSystem.js';
 import { getDerivedStats } from './systems/characterSystem.js';
-import { advanceCombat, setActiveStyle } from './systems/combatSystem.js';
+import { advanceCombat, setActiveStyle, setFarmingMode } from './systems/combatSystem.js';
+import { simulateOfflineKills } from './systems/offlineSettlement.js';
 import * as Renderer from './ui/renderer.js';
 import * as Modal from './ui/modal.js';
 
@@ -49,6 +50,15 @@ function handleCombatEvent(event) {
     case 'retreat-end':
       pushCombatLog('전열을 정비하고 다시 전투를 시작합니다.');
       break;
+    case 'critical-hit':
+      pushCombatLog(`치명타! 추가 데미지 ${Math.ceil(event.bonusDamage)}`);
+      break;
+    case 'monster-stunned':
+      pushCombatLog('몬스터를 기절시켰습니다!');
+      break;
+    case 'monster-weakened':
+      pushCombatLog('몬스터를 약화시켰습니다!');
+      break;
   }
 }
 
@@ -84,14 +94,36 @@ function applyOfflineProgressIfNeeded() {
       });
     }
   } else {
-    // 몬스터 처치는 오프라인 중 시뮬레이션하지 않고, 체력만 회복시킨다 (Document/GameBalance.md 5.4절).
+    // 조건부 오프라인 정산(DPS 기반): 플레이어 DPS가 현재 몬스터를 안정적으로 압도할 때만
+    // 몬스터 처치를 시뮬레이션한다. 그렇지 못하면(파밍 모드 포함) 체력만 회복시킨다.
     const effectiveTime = Math.min(deltaSeconds, GAME_CONFIG.MAX_OFFLINE_CAP_SECONDS);
     if (!state.combat.isRetreating) {
-      const derived = getDerivedStats(state);
-      state.combat.playerCurrentHp = Math.min(
-        derived.maxHp,
-        state.combat.playerCurrentHp + derived.hpRegenPerSec * effectiveTime,
-      );
+      const settlement = simulateOfflineKills(state, effectiveTime);
+      if (settlement.simulated) {
+        state.combat.monsterLevel = settlement.finalLevel;
+        state.combat.monsterCurrentHp = settlement.finalMonsterHp;
+        if (settlement.finalLevel > state.combat.highestMonsterLevel) {
+          state.combat.highestMonsterLevel = settlement.finalLevel;
+        }
+        if (settlement.totalGold > 0) {
+          ResourceSystem.addResource(state, 'gold', settlement.totalGold);
+        }
+        const derived = getDerivedStats(state);
+        state.combat.playerCurrentHp = derived.maxHp;
+        if (settlement.totalKills > 0) {
+          Modal.showOfflineKillModal(modalRoot, {
+            effectiveTimeSeconds: effectiveTime,
+            totalKills: settlement.totalKills,
+            totalGold: settlement.totalGold,
+          });
+        }
+      } else {
+        const derived = getDerivedStats(state);
+        state.combat.playerCurrentHp = Math.min(
+          derived.maxHp,
+          state.combat.playerCurrentHp + derived.hpRegenPerSec * effectiveTime,
+        );
+      }
     }
   }
 
@@ -127,6 +159,9 @@ const refs = Renderer.initRenderer(appRoot, {
   },
   onStyleSelect: (styleId) => {
     setActiveStyle(state, styleId);
+  },
+  onFarmingToggle: () => {
+    setFarmingMode(state, !state.combat.farmingMode);
   },
   onPermanentPurchase: (upgradeId) => {
     const upgradeDef = PERMANENT_UPGRADE_CONFIG.find((u) => u.id === upgradeId);

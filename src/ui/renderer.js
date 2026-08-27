@@ -30,6 +30,7 @@ export function initRenderer(container, {
   onPurchase,
   onBuyQuantityChange,
   onStyleSelect,
+  onFarmingToggle,
   onPermanentPurchase,
   onPermanentBuyQuantityChange,
   onExport,
@@ -57,6 +58,7 @@ export function initRenderer(container, {
           <div class="hp-bar__text" id="player-hp-text">0 / 0</div>
         </div>
         <div class="retreat-banner" id="retreat-banner" hidden>후퇴 중... 체력을 회복하고 있습니다</div>
+        <button type="button" class="farming-toggle-btn" id="farming-toggle-btn">파밍 모드 켜기</button>
         <ul class="combat-log" id="combat-log"></ul>
       </section>
 
@@ -94,6 +96,7 @@ export function initRenderer(container, {
     playerHpFillEl: container.querySelector('#player-hp-fill'),
     playerHpTextEl: container.querySelector('#player-hp-text'),
     retreatBannerEl: container.querySelector('#retreat-banner'),
+    farmingToggleBtn: container.querySelector('#farming-toggle-btn'),
     combatLogEl: container.querySelector('#combat-log'),
     lastRenderedLogLength: -1,
     styleButtons: new Map(),
@@ -101,6 +104,8 @@ export function initRenderer(container, {
     masteryRows: new Map(),
     legacy: null,
   };
+
+  refs.farmingToggleBtn.addEventListener('click', onFarmingToggle);
 
   container.querySelector('#export-btn').addEventListener('click', onExport);
   container.querySelector('#import-btn').addEventListener('click', onImport);
@@ -258,6 +263,12 @@ export function renderCombatState(refs, state) {
   refs.playerHpTextEl.textContent = `${Math.ceil(playerHp)} / ${Math.round(derived.maxHp)}`;
 
   refs.retreatBannerEl.hidden = !state.combat.isRetreating;
+
+  const isFarming = state.combat.farmingMode;
+  refs.farmingToggleBtn.classList.toggle('is-active', isFarming);
+  refs.farmingToggleBtn.textContent = isFarming
+    ? `파밍 모드 끄기 (Lv.${state.combat.monsterLevel} 반복)`
+    : '파밍 모드 켜기';
 
   for (const [styleId, btn] of refs.styleButtons) {
     btn.classList.toggle('is-active', styleId === state.combat.activeStyleId);

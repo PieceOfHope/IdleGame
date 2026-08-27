@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>전투 UI 뼈대 (프로토타입)</title>
+<style>
+  :root {
+    --color-bg: #0f1115;
+    --color-panel: #181b22;
+    --color-panel-alt: #1f232c;
+    --color-border: #2a2f3a;
+    --color-text: #e8e9ec;
+    --color-text-muted: #9aa0ab;
+    --color-accent: #f2b84b;
+    --color-accent-dark: #b8862c;
+    --color-hp: #d9534f;
+    --color-stage: #4a9eff;
+    --color-auto-on: #5bc95b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+
+  .screen {
+    width: 100%;
+    max-width: 480px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── 상단: 스테이지 진행바 ── */
+  .stage-bar {
+    padding: 16px 20px 12px;
+    text-align: center;
+  }
+
+  .stage-label {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  .stage-progress {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 20px;
+    margin: 0 10px;
+  }
+
+  .stage-progress__line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 4px;
+    background: var(--color-stage);
+    transform: translateY(-50%);
+    border-radius: 2px;
+  }
+
+  .stage-progress__checkpoint {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--color-stage);
+    border: 2px solid var(--color-bg);
+  }
+
+  .stage-progress__checkpoint--current {
+    width: 26px;
+    height: 26px;
+    background: #bcdcff;
+  }
+
+  /* ── 중앙: 전투 영역 (배경 없음, 구역만 구분) ── */
+  .battlefield {
+    position: relative;
+    flex: 1;
+    min-height: 320px;
+    margin: 0 12px;
+    border: 1px dashed var(--color-border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .unit {
+    position: absolute;
+    bottom: 40%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transform: translateX(-50%);
+  }
+
+  .unit__hp {
+    width: 44px;
+    height: 6px;
+    background: var(--color-panel-alt);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .unit__hp-fill {
+    height: 100%;
+    width: 100%;
+    background: var(--color-hp);
+  }
+
+  .unit__sprite {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--color-panel);
+    border: 2px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+  }
+
+  .unit--enemy .unit__sprite {
+    border-color: var(--color-hp);
+  }
+
+  .unit--player .unit__sprite {
+    border-color: var(--color-accent);
+  }
+
+  .unit__sprite--aura::after {
+    content: '';
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(74, 158, 255, 0.35), transparent 70%);
+    z-index: -1;
+  }
+
+  .unit__label {
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+
+  /* ── 하단: 자동 토글 + 스킬 버튼 ── */
+  .control-bar {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    padding: 16px 20px 24px;
+  }
+
+  .ctrl-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid var(--color-border);
+    background: var(--color-panel);
+    color: var(--color-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .ctrl-btn--skill {
+    font-size: 1.5rem;
+  }
+
+  .ctrl-btn--auto {
+    background: var(--color-panel-alt);
+    border-color: var(--color-text-muted);
+  }
+
+  .ctrl-btn--auto.is-active {
+    background: var(--color-auto-on);
+    border-color: var(--color-auto-on);
+    color: #0f1115;
+  }
+
+  .ctrl-btn--skill.is-active {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-accent-dark);
+  }
+
+  .ctrl-btn:active {
+    transform: scale(0.95);
+  }
+</style>
+</head>
+<body>
+  <div class="screen">
+    <header class="stage-bar">
+      <div class="stage-label">난이도 1-6</div>
+      <div class="stage-progress">
+        <div class="stage-progress__line"></div>
+        <div class="stage-progress__checkpoint"></div>
+        <div class="stage-progress__checkpoint"></div>
+        <div class="stage-progress__checkpoint stage-progress__checkpoint--current"></div>
+      </div>
+    </header>
+
+    <main class="battlefield" id="battlefield">
+      <div class="unit unit--enemy" style="left:18%">
+        <div class="unit__hp"><div class="unit__hp-fill" style="width:70%"></div></div>
+        <div class="unit__sprite">👹</div>
+        <div class="unit__label">몬스터</div>
+      </div>
+
+      <div class="unit unit--ally" style="left:48%">
+        <div class="unit__hp"><div class="unit__hp-fill" style="width:55%"></div></div>
+        <div class="unit__sprite unit__sprite--aura">🧙</div>
+        <div class="unit__label">아군</div>
+      </div>
+
+      <div class="unit unit--player" style="left:62%">
+        <div class="unit__hp"><div class="unit__hp-fill" style="width:85%"></div></div>
+        <div class="unit__sprite">🥷</div>
+        <div class="unit__label">플레이어</div>
+      </div>
+
+      <div class="unit unit--ally" style="left:75%">
+        <div class="unit__hp"><div class="unit__hp-fill" style="width:100%"></div></div>
+        <div class="unit__sprite">🤖</div>
+        <div class="unit__label">아군</div>
+      </div>
+    </main>
+
+    <footer class="control-bar">
+      <button type="button" class="ctrl-btn ctrl-btn--auto is-active" data-toggle>자동<br>켜짐</button>
+      <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🔥</button>
+      <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🛡️</button>
+      <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🏹</button>
+    </footer>
+  </div>
+
+  <script>
+    // 뼈대 단계 - 실제 로직 없이 클릭 시 활성/비활성 스타일만 토글한다.
+    document.querySelectorAll('[data-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => btn.classList.toggle('is-active'));
+    });
+  </script>
+</body>
+</html>

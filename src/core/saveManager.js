@@ -6,7 +6,7 @@ import { getMonsterForLevel } from '../config/monsterConfig.js';
 import { PERMANENT_UPGRADE_CONFIG } from '../config/permanentUpgradeConfig.js';
 
 const SAVE_KEY = 'idle_game_save_v1';
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 function createDefaultCharacterState() {
   const stats = {};
@@ -23,12 +23,18 @@ function createDefaultCombatState() {
   return {
     activeStyleId: MASTERY_CONFIG[0].id,
     monsterLevel: 1,
+    highestMonsterLevel: 1,
+    farmingMode: false,
     monsterCurrentHp: monster.maxHp,
     playerCurrentHp: CHARACTER_BALANCE.baseHp,
     isRetreating: false,
     retreatRemainingMs: 0,
     playerAttackElapsedMs: 0,
     monsterAttackElapsedMs: 0,
+    dotRemainingMs: 0,
+    dotDamagePerSec: 0,
+    monsterNextHitReductionPct: 0,
+    pendingHeal: 0,
   };
 }
 
@@ -116,6 +122,11 @@ function normalizeState(data) {
     if (Number.isFinite(savedCombat.monsterLevel) && savedCombat.monsterLevel >= 1) {
       state.combat.monsterLevel = Math.floor(savedCombat.monsterLevel);
     }
+    // 구버전 세이브(v3 이하)에는 highestMonsterLevel이 없다 - 당시엔 monsterLevel이 곧 최고 도달 레벨이었다.
+    state.combat.highestMonsterLevel = Number.isFinite(savedCombat.highestMonsterLevel)
+      ? Math.max(Math.floor(savedCombat.highestMonsterLevel), state.combat.monsterLevel)
+      : state.combat.monsterLevel;
+    state.combat.farmingMode = Boolean(savedCombat.farmingMode);
     state.combat.monsterCurrentHp = Number.isFinite(savedCombat.monsterCurrentHp)
       ? savedCombat.monsterCurrentHp
       : getMonsterForLevel(state.combat.monsterLevel).maxHp;
@@ -124,6 +135,10 @@ function normalizeState(data) {
       : CHARACTER_BALANCE.baseHp;
     state.combat.isRetreating = Boolean(savedCombat.isRetreating);
     state.combat.retreatRemainingMs = Number(savedCombat.retreatRemainingMs) || 0;
+    state.combat.dotRemainingMs = Number(savedCombat.dotRemainingMs) || 0;
+    state.combat.dotDamagePerSec = Number(savedCombat.dotDamagePerSec) || 0;
+    state.combat.monsterNextHitReductionPct = Number(savedCombat.monsterNextHitReductionPct) || 0;
+    state.combat.pendingHeal = Number(savedCombat.pendingHeal) || 0;
   }
 
   if (data.settings && typeof data.settings === 'object') {

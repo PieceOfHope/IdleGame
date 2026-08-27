@@ -60,6 +60,30 @@ export function showOfflineRewardModal(rootEl, { effectiveTimeSeconds, earnedByR
   });
 }
 
+export function showOfflineKillModal(rootEl, { effectiveTimeSeconds, totalKills, totalGold }) {
+  const content = document.createElement('div');
+
+  const timeP = document.createElement('p');
+  timeP.textContent = `오프라인 시간: ${formatDuration(effectiveTimeSeconds)}`;
+  content.appendChild(timeP);
+
+  const list = document.createElement('ul');
+  list.className = 'reward-list';
+  const killLi = document.createElement('li');
+  killLi.textContent = `몬스터 처치 ${formatNumber(totalKills)}마리`;
+  list.appendChild(killLi);
+  const goldLi = document.createElement('li');
+  goldLi.textContent = `골드 +${formatNumber(totalGold)}`;
+  list.appendChild(goldLi);
+  content.appendChild(list);
+
+  renderModal(rootEl, {
+    title: '어서오세요!',
+    contentNode: content,
+    actions: [{ label: '확인', primary: true }],
+  });
+}
+
 export function showExportModal(rootEl, jsonString) {
   const content = document.createElement('div');
 
