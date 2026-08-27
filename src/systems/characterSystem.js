@@ -93,3 +93,15 @@ export function getMagicDamage(state, masteryMultiplier) {
     * masteryMultiplier
     * attackPowerMultiplier;
 }
+
+// 스탯 패널 옆에 표시할 요약 수치 - 숙련도 배율은 빼고(=1) 스탯만으로 나오는 기본값을 보여준다.
+export function getStatPreview(state) {
+  const derived = getDerivedStats(state);
+  return {
+    physicalDamage: getPhysicalDamage(state, 1),
+    magicDamage: getMagicDamage(state, 1),
+    attacksPerSec: 1000 / derived.attackIntervalMs,
+    maxHp: derived.maxHp,
+    hpRegenPerSec: derived.hpRegenPerSec,
+  };
+}

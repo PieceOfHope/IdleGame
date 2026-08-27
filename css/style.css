@@ -40,47 +40,100 @@ body {
   gap: 16px;
 }
 
-.game__left,
-.game__right {
+.game__col1,
+.game__col2,
+.game__col3 {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* 넓은 화면(데스크톱)에서는 좌: 전투화면 / 우: 스탯·업그레이드의 2단 구성으로 바꿔
-   페이지 전체 스크롤 없이 한 화면에 담는다 - 우측 패널만 자체적으로 스크롤된다. */
-@media (min-width: 860px) {
+/* 넓은 화면(데스크톱)에서는 3단 구성으로 바꾼다:
+   1열 = 전투 화면+로그, 2열 = 자동으로 성장하는 것(숙련도), 3열 = 직접 선택/배분하는 것(스탯 포인트·전투 스타일·영구 강화).
+   페이지 전체는 물론 각 열도 스크롤이 생기지 않도록 한 화면(뷰포트) 안에 전부 담는다. */
+@media (min-width: 1100px) {
   #app {
-    max-width: 960px;
+    max-width: 1400px;
   }
 
   .game {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr) 240px 340px;
     align-items: start;
     height: 100vh;
     overflow: hidden;
   }
 
-  .game__left {
+  .game__col1,
+  .game__col2,
+  .game__col3 {
     height: 100%;
     overflow: hidden;
   }
 
-  .game__left .battle-screen {
+  .game__col1 .battle-screen {
     flex: 1;
     min-height: 0;
   }
 
-  .game__left .battlefield {
+  .game__col1 .battlefield {
     flex: 1;
     min-height: 220px;
   }
 
-  .game__right {
-    height: 100%;
-    overflow-y: auto;
-    padding-right: 4px;
+  /* 3열은 세로 공간이 빠듯하므로 col2/col3는 더 촘촘한 간격과 카드 크기를 쓴다. */
+  .game__col2,
+  .game__col3 {
+    gap: 6px;
+  }
+
+  .game__col3 .character-level-panel {
+    padding: 6px 10px;
+  }
+
+  .game__col3 .derived-stats-panel {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .game__col3 .derived-stat {
+    padding: 6px 8px;
+  }
+
+  .game__col3 .stat-panel {
+    gap: 4px;
+  }
+
+  .game__col3 .stat-row {
+    padding: 4px 10px;
+  }
+
+  .game__col3 .permanent-upgrade-panel {
+    gap: 6px;
+  }
+
+  .game__col3 .upgrade-row {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .game__col3 .upgrade-row__desc {
+    display: none;
+  }
+
+  .game__col3 .upgrade-row__buy-btn {
+    flex-direction: row;
+    gap: 4px;
+    min-width: 72px;
+    padding: 5px 8px;
+  }
+
+  .game__col3 .qty-btn {
+    padding: 4px;
+  }
+
+  .game__col3 .buy-qty-selector {
+    gap: 6px;
   }
 }
 
@@ -338,7 +391,12 @@ body {
   border-color: var(--color-accent-dark);
 }
 
-.stat-panel,
+.stat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .mastery-panel {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -367,7 +425,10 @@ body {
   margin-bottom: 2px;
 }
 
-.stat-row__level,
+.stat-row__name .level-value {
+  color: var(--color-accent);
+}
+
 .mastery-row__level {
   color: var(--color-accent);
 }
@@ -380,6 +441,7 @@ body {
 .stat-row__points {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .stat-point-btn {
@@ -449,6 +511,36 @@ body {
   margin: 0 0 8px;
 }
 
+.panel-title__hint {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+.derived-stats-panel {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.derived-stat {
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.derived-stat__label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.derived-stat__value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
 .permanent-upgrade-panel {
   display: flex;
   flex-direction: column;
@@ -488,8 +580,9 @@ body {
 
 .upgrade-row__level {
   font-size: 0.8rem;
+  font-weight: 400;
   color: var(--color-text-muted);
-  margin-top: 4px;
+  margin-left: 4px;
 }
 
 .upgrade-row__buy-btn {

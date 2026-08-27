@@ -4,13 +4,9 @@ import { STAT_CONFIG, CHARACTER_BALANCE } from '../config/characterConfig.js';
 import { MASTERY_CONFIG } from '../config/masteryConfig.js';
 import { getMonsterForLevel } from '../config/monsterConfig.js';
 import { PERMANENT_UPGRADE_CONFIG } from '../config/permanentUpgradeConfig.js';
-import { levelFromUsage } from '../systems/masteryCurve.js';
 
 const SAVE_KEY = 'idle_game_save_v1';
 const CURRENT_VERSION = 5;
-
-// v4 이하 세이브에서 스탯이 사용 횟수로 자동 성장하던 시절의 계수 - 마이그레이션 전용으로만 남겨둔다.
-const LEGACY_STAT_LEVEL_COEFFICIENT = 0.6;
 
 function createDefaultCharacterState() {
   const allocatedStatPoints = {};
@@ -109,20 +105,14 @@ function normalizeState(data) {
   }
 
   // 구버전 세이브(v1/v2)에는 character/combat/permanentUpgrades 필드가 없다 - 위에서 만든 기본값이 그대로 채워진다.
+  // v4 이하(스탯이 사용 횟수로 자동 성장하던 세이브)의 기존 스탯 진행도는 새 포인트 배분 체계와 맞지 않아 이어받지 않는다 -
+  // totalExp/allocatedStatPoints는 항상 0부터 새로 쌓인다.
   if (data.character && typeof data.character === 'object') {
     if (data.character.allocatedStatPoints) {
-      // v5+ : 레벨업 포인트 배분 방식.
       state.character.totalExp = Number(data.character.totalExp) || 0;
       for (const stat of STAT_CONFIG) {
         const saved = data.character.allocatedStatPoints[stat.id];
         state.character.allocatedStatPoints[stat.id] = Math.max(0, Math.floor(Number(saved) || 0));
-      }
-    } else if (data.character.stats) {
-      // v4 이하 : 스탯이 사용 횟수로 자동 성장하던 세이브 - 기존 스탯 레벨만큼 포인트를 미리 배분된 것으로 전환한다.
-      // (totalExp는 0부터 다시 쌓이며, 이미 배분된 포인트가 많으면 처음엔 미배분 포인트가 0으로 시작한다.)
-      for (const stat of STAT_CONFIG) {
-        const savedUses = Number(data.character.stats[stat.id]?.totalUses) || 0;
-        state.character.allocatedStatPoints[stat.id] = levelFromUsage(savedUses, LEGACY_STAT_LEVEL_COEFFICIENT);
       }
     }
     for (const masteryDef of MASTERY_CONFIG) {

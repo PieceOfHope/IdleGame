@@ -241,6 +241,7 @@ const loop = createGameLoop({
     battlefield.setSnapshot(Renderer.getBattlefieldSnapshot(state));
     Renderer.renderCombatLog(refs, combatLog);
     Renderer.renderCharacterLevel(refs, state);
+    Renderer.renderDerivedStats(refs, state);
     Renderer.renderStatPanel(refs, state, STAT_CONFIG);
     Renderer.renderMasteryPanel(refs, state, MASTERY_CONFIG);
     Renderer.renderPermanentUpgradePanel(refs, state, PERMANENT_UPGRADE_CONFIG, { buyQuantity: permanentBuyQuantity });

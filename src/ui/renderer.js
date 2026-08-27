@@ -6,6 +6,7 @@ import {
   getCharacterLevel,
   getCharacterExpProgressPct,
   getUnspentStatPoints,
+  getStatPreview,
 } from '../systems/characterSystem.js';
 import { getMasteryLevel, getMasteryUsesUntilNextLevel } from '../systems/masterySystem.js';
 import { getMonsterSnapshot } from '../systems/combatSystem.js';
@@ -47,7 +48,7 @@ export function initRenderer(container, {
 }) {
   container.innerHTML = `
     <div class="game">
-     <div class="game__left">
+     <div class="game__col1">
       <header class="game__header"><h1>Idle Craft &amp; Odyssey</h1></header>
 
       <section class="resource-panel">
@@ -83,17 +84,45 @@ export function initRenderer(container, {
       </section>
      </div>
 
-     <div class="game__right">
-      <section class="style-selector" id="style-selector"></section>
+     <div class="game__col2">
+      <h2 class="panel-title">숙련도 <span class="panel-title__hint">(자동 성장)</span></h2>
+      <section class="mastery-panel" id="mastery-panel"></section>
+     </div>
 
+     <div class="game__col3">
       <section class="character-level-panel">
-        <div class="character-level-panel__level">Lv. <span id="character-level">1</span></div>
+        <div class="character-level-panel__level">캐릭터 Lv. <span id="character-level">0</span></div>
         <div class="character-level-panel__exp-bar"><div class="character-level-panel__exp-fill" id="character-exp-fill"></div></div>
         <div class="character-level-panel__points">배분 가능 포인트: <span id="unspent-points">0</span></div>
       </section>
 
+      <section class="derived-stats-panel" id="derived-stats-panel">
+        <div class="derived-stat" data-stat="physical">
+          <div class="derived-stat__label">물리 공격력</div>
+          <div class="derived-stat__value" id="derived-physical">0</div>
+        </div>
+        <div class="derived-stat" data-stat="magic">
+          <div class="derived-stat__label">마법 공격력</div>
+          <div class="derived-stat__value" id="derived-magic">0</div>
+        </div>
+        <div class="derived-stat" data-stat="attackSpeed">
+          <div class="derived-stat__label">공격 속도</div>
+          <div class="derived-stat__value" id="derived-attack-speed">0/초</div>
+        </div>
+        <div class="derived-stat" data-stat="maxHp">
+          <div class="derived-stat__label">최대 체력</div>
+          <div class="derived-stat__value" id="derived-max-hp">0</div>
+        </div>
+        <div class="derived-stat" data-stat="regen">
+          <div class="derived-stat__label">체력 회복</div>
+          <div class="derived-stat__value" id="derived-regen">0/초</div>
+        </div>
+      </section>
+
       <section class="stat-panel" id="stat-panel"></section>
-      <section class="mastery-panel" id="mastery-panel"></section>
+
+      <h2 class="panel-title">전투 스타일 <span class="panel-title__hint">(선택)</span></h2>
+      <section class="style-selector" id="style-selector"></section>
 
       <section class="permanent-upgrade-panel">
         <h2 class="panel-title">영구 강화</h2>
@@ -128,6 +157,11 @@ export function initRenderer(container, {
     characterLevelEl: container.querySelector('#character-level'),
     characterExpFillEl: container.querySelector('#character-exp-fill'),
     unspentPointsEl: container.querySelector('#unspent-points'),
+    derivedPhysicalEl: container.querySelector('#derived-physical'),
+    derivedMagicEl: container.querySelector('#derived-magic'),
+    derivedAttackSpeedEl: container.querySelector('#derived-attack-speed'),
+    derivedMaxHpEl: container.querySelector('#derived-max-hp'),
+    derivedRegenEl: container.querySelector('#derived-regen'),
     styleButtons: new Map(),
     statRows: new Map(),
     masteryRows: new Map(),
@@ -159,9 +193,9 @@ export function initRenderer(container, {
   for (const statDef of statConfig) {
     const row = document.createElement('div');
     row.className = 'stat-row';
+    row.title = statDef.hint ?? '';
     row.innerHTML = `
-      <div class="stat-row__name">${statDef.name}</div>
-      <div class="stat-row__level">Lv. <span class="level-value">0</span></div>
+      <div class="stat-row__name">${statDef.name} <span class="level-value">0</span></div>
       <div class="stat-row__points">
         <button type="button" class="stat-point-btn stat-point-btn--minus">-</button>
         <button type="button" class="stat-point-btn stat-point-btn--plus">+</button>
@@ -211,11 +245,11 @@ export function initRenderer(container, {
   for (const upgradeDef of permanentUpgradeConfig) {
     const row = document.createElement('div');
     row.className = 'upgrade-row';
+    row.title = upgradeDef.description;
     row.innerHTML = `
       <div class="upgrade-row__info">
-        <div class="upgrade-row__name">${upgradeDef.name}</div>
+        <div class="upgrade-row__name">${upgradeDef.name} <span class="upgrade-row__level">Lv. <span class="level-value">0</span></span></div>
         <div class="upgrade-row__desc">${upgradeDef.description}</div>
-        <div class="upgrade-row__level">Lv. <span class="level-value">0</span></div>
       </div>
       <button type="button" class="upgrade-row__buy-btn">
         <span class="buy-label">구매</span>
@@ -338,6 +372,15 @@ export function renderCharacterLevel(refs, state) {
   if (refs.unspentPointsEl.textContent !== String(unspent)) {
     refs.unspentPointsEl.textContent = String(unspent);
   }
+}
+
+export function renderDerivedStats(refs, state) {
+  const preview = getStatPreview(state);
+  refs.derivedPhysicalEl.textContent = formatNumber(preview.physicalDamage);
+  refs.derivedMagicEl.textContent = formatNumber(preview.magicDamage);
+  refs.derivedAttackSpeedEl.textContent = `${preview.attacksPerSec.toFixed(2)}/초`;
+  refs.derivedMaxHpEl.textContent = formatNumber(preview.maxHp);
+  refs.derivedRegenEl.textContent = `${preview.hpRegenPerSec.toFixed(2)}/초`;
 }
 
 export function renderStatPanel(refs, state, statConfig) {
