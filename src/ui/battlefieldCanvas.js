@@ -1,6 +1,5 @@
 const UNIT_LEFT_PCT = {
-  ally: 0.18,
-  player: 0.36,
+  player: 0.22,
   enemy0: 0.66,
   enemy1: 0.79,
   enemy2: 0.92,
@@ -20,7 +19,6 @@ const COLORS = {
   textMuted: '#9aa0ab',
   danger: '#d9534f',
   accent: '#f2b84b',
-  ally: '#4a9eff',
 };
 
 const ATTACK_DURATION_MS = 220;
@@ -125,7 +123,6 @@ export function createBattlefieldRenderer(canvas) {
   const ctx = canvas.getContext('2d');
 
   const units = {
-    ally: new UnitVisual('ally', '🧙', '아군', COLORS.ally, true),
     player: new UnitVisual('player', '🥷', '플레이어', COLORS.accent, true),
     enemy0: new UnitVisual('enemy0', '👹', '몬스터', COLORS.danger, true),
     enemy1: new UnitVisual('enemy1', '👹', '몬스터', COLORS.danger, false),
@@ -222,7 +219,7 @@ export function createBattlefieldRenderer(canvas) {
     ctx.lineWidth = 2;
     ctx.strokeStyle = unit.glowColor;
     ctx.shadowColor = unit.glowColor;
-    ctx.shadowBlur = unit.key === 'ally' ? 14 : 6;
+    ctx.shadowBlur = unit.key === 'player' ? 14 : 6;
     ctx.stroke();
     ctx.shadowBlur = 0;
 
@@ -263,7 +260,6 @@ export function createBattlefieldRenderer(canvas) {
 
   function draw(now) {
     ctx.clearRect(0, 0, width, height);
-    drawUnit(units.ally, now);
     drawUnit(units.player, now);
     drawUnit(units.enemy0, now);
     drawUnit(units.enemy1, now);

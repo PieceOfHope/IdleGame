@@ -110,7 +110,7 @@ export function initRenderer(container, {
     retreatBannerEl: container.querySelector('#retreat-banner'),
     farmingToggleBtn: container.querySelector('#farming-toggle-btn'),
     combatLogEl: container.querySelector('#combat-log'),
-    lastRenderedLogLength: -1,
+    lastRenderedLogKey: null,
     styleButtons: new Map(),
     statRows: new Map(),
     masteryRows: new Map(),
@@ -294,8 +294,10 @@ export function getBattlefieldSnapshot(state) {
 }
 
 export function renderCombatLog(refs, logLines) {
-  if (refs.lastRenderedLogLength === logLines.length) return;
-  refs.lastRenderedLogLength = logLines.length;
+  // 로그가 최대 줄 수에 도달하면 배열 길이가 더 이상 안 바뀌므로, 길이 대신 내용 자체를 비교해야 한다.
+  const key = logLines.join('\n');
+  if (refs.lastRenderedLogKey === key) return;
+  refs.lastRenderedLogKey = key;
   refs.combatLogEl.innerHTML = logLines.map((line) => `<li>${line}</li>`).join('');
 }
 
