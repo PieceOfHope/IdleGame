@@ -1,5 +1,5 @@
 import { getMonsterForLevel } from '../config/monsterConfig.js';
-import { getDerivedStats } from './characterSystem.js';
+import { getDerivedStats, getExpGainMultiplier } from './characterSystem.js';
 import { getExpectedPlayerDps } from './combatSystem.js';
 
 const SAFETY_MARGIN = 0.9; // 몬스터에게 받는 예상 피해가 최대체력의 90% 미만이어야 "안정적"으로 판단
@@ -29,6 +29,7 @@ export function simulateOfflineKills(state, effectiveTimeSeconds) {
   let currentLevel = startLevel;
   let currentHp = state.combat.monsterCurrentHp;
   let totalGold = 0;
+  let totalExp = 0;
   let totalKills = 0;
 
   while (remainingSeconds > 0 && totalKills < MAX_SIMULATED_KILLS) {
@@ -44,6 +45,7 @@ export function simulateOfflineKills(state, effectiveTimeSeconds) {
 
     remainingSeconds -= timeToKillSeconds;
     totalGold += monster.goldReward;
+    totalExp += monster.expReward * getExpGainMultiplier(state);
     totalKills += 1;
     currentLevel += 1;
     currentHp = getMonsterForLevel(currentLevel).maxHp;
@@ -52,6 +54,7 @@ export function simulateOfflineKills(state, effectiveTimeSeconds) {
   return {
     simulated: true,
     totalGold,
+    totalExp,
     totalKills,
     finalLevel: currentLevel,
     finalMonsterHp: currentHp,

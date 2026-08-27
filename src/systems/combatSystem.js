@@ -128,6 +128,10 @@ export function getExpectedPlayerDps(state) {
     extraDps += level * trait.coefficientPerLevel;
   }
 
+  // '치명타 강화' 영구강화 - 스타일 고유 치명타 특성과 별개로 항상 판정되므로 기대 데미지에도 별도로 더한다.
+  const permanentCritChance = getPermanentCritChance(state);
+  expectedDamagePerHit += baseDamage * permanentCritChance * (CHARACTER_BALANCE.permanentCritMultiplier - 1);
+
   return expectedDamagePerHit * (1000 / attackIntervalMs) + extraDps;
 }
 

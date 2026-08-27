@@ -11,7 +11,7 @@ import { createGameLoop } from './core/gameLoop.js';
 import * as ResourceSystem from './systems/resourceSystem.js';
 import * as UpgradeSystem from './systems/upgradeSystem.js';
 import * as PermanentUpgradeSystem from './systems/permanentUpgradeSystem.js';
-import { getDerivedStats, getCharacterLevel, allocateStatPoint, deallocateStatPoint } from './systems/characterSystem.js';
+import { getDerivedStats, getCharacterLevel, allocateStatPoint, deallocateStatPoint, addCharacterExp } from './systems/characterSystem.js';
 import { advanceCombat, setActiveStyle, setFarmingMode } from './systems/combatSystem.js';
 import { simulateOfflineKills } from './systems/offlineSettlement.js';
 import * as Renderer from './ui/renderer.js';
@@ -119,9 +119,15 @@ function applyOfflineProgressIfNeeded() {
         if (settlement.totalGold > 0) {
           ResourceSystem.addResource(state, 'gold', settlement.totalGold);
         }
+        if (settlement.totalExp > 0) {
+          addCharacterExp(state, settlement.totalExp);
+        }
         const derived = getDerivedStats(state);
         state.combat.playerCurrentHp = derived.maxHp;
         if (settlement.totalKills > 0) {
+          // 오프라인 정산 중 쌓여있던 몬스터 스택은 단일 몬스터 시뮬레이션과 맞지 않으므로 초기화한다.
+          state.combat.extraEnemies = [];
+          state.combat.enemySpawnElapsedMs = 0;
           Modal.showOfflineKillModal(modalRoot, {
             effectiveTimeSeconds: effectiveTime,
             totalKills: settlement.totalKills,
