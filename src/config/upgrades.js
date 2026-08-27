@@ -1,0 +1,31 @@
+export const UPGRADE_CONFIG = [
+  {
+    id: 'worker',
+    name: '일꾼',
+    description: '초당 골드를 채집합니다.',
+    resourceId: 'gold',
+    baseCost: 10,
+    costMultiplier: 1.15,
+    baseProduction: 1,
+  },
+  {
+    id: 'miner',
+    name: '광부',
+    description: '곡괭이로 더 많은 골드를 캡니다.',
+    resourceId: 'gold',
+    baseCost: 100,
+    costMultiplier: 1.17,
+    baseProduction: 8,
+    requiresUpgrade: { id: 'worker', level: 5 },
+  },
+  {
+    id: 'factory',
+    name: '자동 채굴 공장',
+    description: '자동화된 설비로 대량 채굴합니다.',
+    resourceId: 'gold',
+    baseCost: 1100,
+    costMultiplier: 1.19,
+    baseProduction: 47,
+    requiresUpgrade: { id: 'miner', level: 5 },
+  },
+];
