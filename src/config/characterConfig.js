@@ -24,6 +24,7 @@ export const CHARACTER_BALANCE = {
   minAttackIntervalMs: 200, // AGI 스노우볼링 방지 하한선
   hpPerVitLevel: 4,
   regenPerRecoveryLevel: 0.05,
+  permanentCritMultiplier: 1.5, // '치명타 강화' 영구강화가 굴리는 치명타의 배율 (스타일 고유 치명타와 별개)
 };
 
 export const RETREAT_DURATION_MS = 3000;

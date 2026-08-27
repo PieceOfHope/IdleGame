@@ -87,6 +87,11 @@ body {
     gap: 6px;
   }
 
+  .game__col3 .panel-title {
+    margin: 0 0 4px;
+  }
+
+
   .game__col3 .character-level-panel {
     padding: 6px 10px;
   }
@@ -112,9 +117,18 @@ body {
     gap: 6px;
   }
 
+  .game__col3 .upgrade-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
   .game__col3 .upgrade-row {
-    padding: 6px 10px;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 4px 8px;
+    gap: 2px;
+    font-size: 0.72rem;
   }
 
   .game__col3 .upgrade-row__desc {
@@ -122,10 +136,13 @@ body {
   }
 
   .game__col3 .upgrade-row__buy-btn {
+    align-self: stretch;
     flex-direction: row;
+    justify-content: center;
     gap: 4px;
-    min-width: 72px;
-    padding: 5px 8px;
+    min-width: 0;
+    padding: 3px 6px;
+    font-size: 0.72rem;
   }
 
   .game__col3 .qty-btn {
@@ -370,27 +387,6 @@ body {
   gap: 8px;
 }
 
-.style-btn {
-  padding: 10px 4px;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-  background: var(--color-panel);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.style-btn--magic {
-  border-color: #5b7fd9;
-}
-
-.style-btn.is-active {
-  background: var(--color-accent-dark);
-  color: #fff;
-  border-color: var(--color-accent-dark);
-}
-
 .stat-panel {
   display: flex;
   flex-direction: column;
@@ -417,6 +413,29 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+}
+
+.mastery-row {
+  display: block;
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.mastery-row--magic {
+  border-color: #5b7fd9;
+}
+
+.mastery-row.is-active {
+  background: var(--color-accent-dark);
+  border-color: var(--color-accent-dark);
+}
+
+.mastery-row.is-active .mastery-row__level,
+.mastery-row.is-active .mastery-row__next {
+  color: #fff;
 }
 
 .stat-row__name,

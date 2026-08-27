@@ -1,7 +1,14 @@
 import { getMonsterForLevel, MONSTER_BALANCE } from '../config/monsterConfig.js';
 import { MASTERY_CONFIG } from '../config/masteryConfig.js';
-import { RETREAT_DURATION_MS } from '../config/characterConfig.js';
-import { getDerivedStats, getPhysicalDamage, getMagicDamage, addCharacterExp } from './characterSystem.js';
+import { RETREAT_DURATION_MS, CHARACTER_BALANCE } from '../config/characterConfig.js';
+import {
+  getDerivedStats,
+  getPhysicalDamage,
+  getMagicDamage,
+  addCharacterExp,
+  getPermanentCritChance,
+  getExpGainMultiplier,
+} from './characterSystem.js';
 import { getMasteryDamageMultiplier, getMasteryLevel, addMasteryUsage } from './masterySystem.js';
 import { addResource } from './resourceSystem.js';
 
@@ -157,8 +164,9 @@ function damageMonster(state, damage, onEvent) {
 
   const defeatedMonster = getMonsterForLevel(combat.monsterLevel);
   addResource(state, 'gold', defeatedMonster.goldReward);
-  addCharacterExp(state, defeatedMonster.expReward);
-  onEvent({ type: 'monster-defeated', level: combat.monsterLevel, reward: defeatedMonster.goldReward, exp: defeatedMonster.expReward });
+  const expGained = defeatedMonster.expReward * getExpGainMultiplier(state);
+  addCharacterExp(state, expGained);
+  onEvent({ type: 'monster-defeated', level: combat.monsterLevel, reward: defeatedMonster.goldReward, exp: expGained });
 
   promoteNextEnemy(state);
 }
@@ -199,7 +207,16 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
     combat.playerAttackElapsedMs -= attackIntervalMs;
 
     const baseDamage = getBaseAttackDamage(state, styleDef);
-    const finalDamage = applyStyleTrait(state, styleDef, baseDamage, onEvent);
+    let finalDamage = applyStyleTrait(state, styleDef, baseDamage, onEvent);
+
+    // '치명타 강화' 영구강화 - 스타일 고유 치명타 특성(활 등)과 별개로 항상 판정된다.
+    const permanentCritChance = getPermanentCritChance(state);
+    if (permanentCritChance > 0 && Math.random() < permanentCritChance) {
+      const bonusDamage = finalDamage * (CHARACTER_BALANCE.permanentCritMultiplier - 1);
+      finalDamage += bonusDamage;
+      onEvent({ type: 'critical-hit', bonusDamage });
+    }
+
     addMasteryUsage(state, styleDef.id, 1);
     onEvent({ type: 'player-attack', damage: finalDamage, styleId: styleDef.id });
 

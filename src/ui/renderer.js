@@ -12,6 +12,7 @@ import { getMasteryLevel, getMasteryUsesUntilNextLevel } from '../systems/master
 import { getMonsterSnapshot } from '../systems/combatSystem.js';
 import {
   getPermanentUpgradeLevel,
+  isPermanentUpgradeUnlocked,
   getBulkCost as getPermanentBulkCost,
   getMaxAffordableQuantity as getPermanentMaxAffordableQuantity,
 } from '../systems/permanentUpgradeSystem.js';
@@ -85,7 +86,7 @@ export function initRenderer(container, {
      </div>
 
      <div class="game__col2">
-      <h2 class="panel-title">숙련도 <span class="panel-title__hint">(자동 성장)</span></h2>
+      <h2 class="panel-title">전투 스타일 <span class="panel-title__hint">(선택 시 자동 성장)</span></h2>
       <section class="mastery-panel" id="mastery-panel"></section>
      </div>
 
@@ -120,9 +121,6 @@ export function initRenderer(container, {
       </section>
 
       <section class="stat-panel" id="stat-panel"></section>
-
-      <h2 class="panel-title">전투 스타일 <span class="panel-title__hint">(선택)</span></h2>
-      <section class="style-selector" id="style-selector"></section>
 
       <section class="permanent-upgrade-panel">
         <h2 class="panel-title">영구 강화</h2>
@@ -162,7 +160,6 @@ export function initRenderer(container, {
     derivedAttackSpeedEl: container.querySelector('#derived-attack-speed'),
     derivedMaxHpEl: container.querySelector('#derived-max-hp'),
     derivedRegenEl: container.querySelector('#derived-regen'),
-    styleButtons: new Map(),
     statRows: new Map(),
     masteryRows: new Map(),
     legacy: null,
@@ -177,17 +174,6 @@ export function initRenderer(container, {
   container.querySelector('#export-btn').addEventListener('click', onExport);
   container.querySelector('#import-btn').addEventListener('click', onImport);
   container.querySelector('#reset-btn').addEventListener('click', onReset);
-
-  const styleSelectorEl = container.querySelector('#style-selector');
-  for (const masteryDef of masteryConfig) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = `style-btn style-btn--${masteryDef.category}`;
-    btn.textContent = masteryDef.name;
-    btn.addEventListener('click', () => onStyleSelect(masteryDef.id));
-    styleSelectorEl.appendChild(btn);
-    refs.styleButtons.set(masteryDef.id, btn);
-  }
 
   const statPanelEl = container.querySelector('#stat-panel');
   for (const statDef of statConfig) {
@@ -216,15 +202,18 @@ export function initRenderer(container, {
 
   const masteryPanelEl = container.querySelector('#mastery-panel');
   for (const masteryDef of masteryConfig) {
-    const row = document.createElement('div');
+    const row = document.createElement('button');
+    row.type = 'button';
     row.className = `mastery-row mastery-row--${masteryDef.category}`;
     row.innerHTML = `
       <div class="mastery-row__name">${masteryDef.name}</div>
       <div class="mastery-row__level">Lv. <span class="level-value">0</span></div>
       <div class="mastery-row__next">다음까지 <span class="next-value">-</span></div>
     `;
+    row.addEventListener('click', () => onStyleSelect(masteryDef.id));
     masteryPanelEl.appendChild(row);
     refs.masteryRows.set(masteryDef.id, {
+      root: row,
       levelEl: row.querySelector('.level-value'),
       nextEl: row.querySelector('.next-value'),
       lastRendered: {},
@@ -260,6 +249,7 @@ export function initRenderer(container, {
     buyBtn.addEventListener('click', () => onPermanentPurchase(upgradeDef.id));
     permanentUpgradeListEl.appendChild(row);
     permanentUpgradeRows.set(upgradeDef.id, {
+      root: row,
       levelEl: row.querySelector('.level-value'),
       buyBtn,
       buyCostEl: row.querySelector('.buy-cost'),
@@ -332,8 +322,8 @@ export function renderCombatState(refs, state) {
   refs.farmingToggleBtn.classList.toggle('is-active', isFarming);
   refs.farmingToggleBtn.innerHTML = isFarming ? '자동<br>켜짐' : '자동<br>꺼짐';
 
-  for (const [styleId, btn] of refs.styleButtons) {
-    btn.classList.toggle('is-active', styleId === state.combat.activeStyleId);
+  for (const [masteryId, rowRefs] of refs.masteryRows) {
+    rowRefs.root.classList.toggle('is-active', masteryId === state.combat.activeStyleId);
   }
 }
 
@@ -419,11 +409,28 @@ export function renderMasteryPanel(refs, state, masteryConfig) {
   }
 }
 
-export function renderPermanentUpgradePanel(refs, state, permanentUpgradeConfig, { buyQuantity }) {
+export function renderPermanentUpgradePanel(refs, state, permanentUpgradeConfig, { buyQuantity, characterLevel }) {
   const goldAmount = state.resources.gold.amount;
 
   for (const upgradeDef of permanentUpgradeConfig) {
     const rowRefs = refs.permanentUpgradeRows.get(upgradeDef.id);
+    const unlocked = isPermanentUpgradeUnlocked(upgradeDef, characterLevel);
+
+    if (!unlocked) {
+      if (rowRefs.lastRendered.locked !== true) {
+        rowRefs.root.classList.add('is-locked');
+        rowRefs.levelEl.textContent = '???';
+        rowRefs.buyCostEl.textContent = `Lv.${upgradeDef.requiresLevel} 필요`;
+        rowRefs.buyBtn.disabled = true;
+        rowRefs.lastRendered = { locked: true };
+      }
+      continue;
+    }
+    if (rowRefs.lastRendered.locked !== false) {
+      rowRefs.root.classList.remove('is-locked');
+      rowRefs.lastRendered.locked = false;
+    }
+
     const level = getPermanentUpgradeLevel(state, upgradeDef.id);
     if (rowRefs.lastRendered.level !== level) {
       rowRefs.levelEl.textContent = String(level);

@@ -11,7 +11,7 @@ import { createGameLoop } from './core/gameLoop.js';
 import * as ResourceSystem from './systems/resourceSystem.js';
 import * as UpgradeSystem from './systems/upgradeSystem.js';
 import * as PermanentUpgradeSystem from './systems/permanentUpgradeSystem.js';
-import { getDerivedStats, allocateStatPoint, deallocateStatPoint } from './systems/characterSystem.js';
+import { getDerivedStats, getCharacterLevel, allocateStatPoint, deallocateStatPoint } from './systems/characterSystem.js';
 import { advanceCombat, setActiveStyle, setFarmingMode } from './systems/combatSystem.js';
 import { simulateOfflineKills } from './systems/offlineSettlement.js';
 import * as Renderer from './ui/renderer.js';
@@ -183,6 +183,7 @@ const refs = Renderer.initRenderer(appRoot, {
   onPermanentPurchase: (upgradeId) => {
     const upgradeDef = PERMANENT_UPGRADE_CONFIG.find((u) => u.id === upgradeId);
     if (!upgradeDef) return;
+    if (!PermanentUpgradeSystem.isPermanentUpgradeUnlocked(upgradeDef, getCharacterLevel(state))) return;
 
     const level = PermanentUpgradeSystem.getPermanentUpgradeLevel(state, upgradeDef.id);
     const goldAmount = state.resources.gold.amount;
@@ -244,7 +245,10 @@ const loop = createGameLoop({
     Renderer.renderDerivedStats(refs, state);
     Renderer.renderStatPanel(refs, state, STAT_CONFIG);
     Renderer.renderMasteryPanel(refs, state, MASTERY_CONFIG);
-    Renderer.renderPermanentUpgradePanel(refs, state, PERMANENT_UPGRADE_CONFIG, { buyQuantity: permanentBuyQuantity });
+    Renderer.renderPermanentUpgradePanel(refs, state, PERMANENT_UPGRADE_CONFIG, {
+      buyQuantity: permanentBuyQuantity,
+      characterLevel: getCharacterLevel(state),
+    });
     if (GAME_CONFIG.LEGACY_PRODUCTION_ENABLED) {
       Renderer.renderLegacyState(refs, state, UPGRADE_CONFIG, RESOURCE_CONFIG, {
         rps: computeLegacyRPS(),

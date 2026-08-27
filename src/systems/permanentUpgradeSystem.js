@@ -8,6 +8,11 @@ export function getPermanentUpgradeLevel(state, upgradeId) {
   return state.permanentUpgrades[upgradeId]?.level ?? 0;
 }
 
+// characterLevel은 호출측(characterSystem.js와의 순환 참조를 피하기 위해)에서 계산해 전달한다.
+export function isPermanentUpgradeUnlocked(upgradeDef, characterLevel) {
+  return characterLevel >= (upgradeDef.requiresLevel ?? 0);
+}
+
 export function purchasePermanentUpgrade(state, upgradeDef, quantity) {
   const level = getPermanentUpgradeLevel(state, upgradeDef.id);
   const cost = getBulkCost(upgradeDef, level, quantity);

@@ -71,9 +71,19 @@ export function getDerivedStats(state) {
       + getPermanentBonus(state, 'hpRegen'),
     attackIntervalMs: Math.max(
       CHARACTER_BALANCE.minAttackIntervalMs,
-      CHARACTER_BALANCE.baseAttackIntervalMs / (1 + agiLevel * CHARACTER_BALANCE.agiSpeedPerLevel),
+      CHARACTER_BALANCE.baseAttackIntervalMs
+        / (1 + agiLevel * CHARACTER_BALANCE.agiSpeedPerLevel + getPermanentBonus(state, 'attackSpeed')),
     ),
   };
+}
+
+// '치명타 강화' 영구강화가 굴리는 확률 - 무기/마법 스타일 고유 치명타 특성과는 별개로 항상 적용된다.
+export function getPermanentCritChance(state) {
+  return getPermanentBonus(state, 'critChance');
+}
+
+export function getExpGainMultiplier(state) {
+  return 1 + getPermanentBonus(state, 'expGain');
 }
 
 export function getPhysicalDamage(state, masteryMultiplier) {
