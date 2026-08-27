@@ -15,6 +15,7 @@ import { getDerivedStats } from './systems/characterSystem.js';
 import { advanceCombat, setActiveStyle, setFarmingMode } from './systems/combatSystem.js';
 import { simulateOfflineKills } from './systems/offlineSettlement.js';
 import * as Renderer from './ui/renderer.js';
+import { createBattlefieldRenderer } from './ui/battlefieldCanvas.js';
 import * as Modal from './ui/modal.js';
 
 const appRoot = document.getElementById('app');
@@ -37,12 +38,16 @@ function handleCombatEvent(event) {
   switch (event.type) {
     case 'player-attack':
       pushCombatLog(`플레이어의 공격! ${Math.ceil(event.damage)} 데미지`);
+      battlefield.triggerAttack('player');
+      battlefield.triggerHit('enemy0');
       break;
     case 'monster-defeated':
       pushCombatLog(`몬스터 Lv.${event.level} 처치! 골드 +${event.reward}`);
+      battlefield.triggerDefeat('enemy0', event.reward);
       break;
     case 'monster-attack':
       pushCombatLog(`몬스터의 반격! ${event.damage} 데미지`);
+      battlefield.triggerHit('player');
       break;
     case 'player-retreat':
       pushCombatLog('체력이 다해 후퇴합니다...');
@@ -52,12 +57,15 @@ function handleCombatEvent(event) {
       break;
     case 'critical-hit':
       pushCombatLog(`치명타! 추가 데미지 ${Math.ceil(event.bonusDamage)}`);
+      battlefield.spawnText('enemy0', '치명타!', '#ff6b6b');
       break;
     case 'monster-stunned':
       pushCombatLog('몬스터를 기절시켰습니다!');
+      battlefield.spawnText('enemy0', '기절!', '#bcdcff');
       break;
     case 'monster-weakened':
       pushCombatLog('몬스터를 약화시켰습니다!');
+      battlefield.spawnText('enemy0', '약화!', '#bcdcff');
       break;
     case 'enemy-stacked':
       pushCombatLog(`몬스터 Lv.${event.level}가 추가로 나타났습니다!`);
@@ -208,6 +216,8 @@ const refs = Renderer.initRenderer(appRoot, {
   },
 });
 
+const battlefield = createBattlefieldRenderer(refs.battlefieldCanvasEl);
+
 const loop = createGameLoop({
   tickMs: GAME_CONFIG.TICK_MS,
   onTick: (dtSeconds) => {
@@ -222,6 +232,7 @@ const loop = createGameLoop({
   onRender: () => {
     Renderer.renderResourceAmount(refs, state, primaryResourceId);
     Renderer.renderCombatState(refs, state);
+    battlefield.setSnapshot(Renderer.getBattlefieldSnapshot(state));
     Renderer.renderCombatLog(refs, combatLog);
     Renderer.renderStatPanel(refs, state, STAT_CONFIG);
     Renderer.renderMasteryPanel(refs, state, MASTERY_CONFIG);

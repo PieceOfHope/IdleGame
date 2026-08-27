@@ -39,6 +39,7 @@ export function initRenderer(container, {
 }) {
   container.innerHTML = `
     <div class="game">
+     <div class="game__left">
       <header class="game__header"><h1>Idle Craft &amp; Odyssey</h1></header>
 
       <section class="resource-panel">
@@ -58,35 +59,7 @@ export function initRenderer(container, {
         </div>
 
         <div class="battlefield" id="battlefield">
-          <div class="unit unit--ally" style="left:18%">
-            <div class="unit__hp"><div class="unit__hp-fill" style="width:100%"></div></div>
-            <div class="unit__sprite unit__sprite--aura">🧙</div>
-            <div class="unit__label">아군</div>
-          </div>
-
-          <div class="unit unit--player" style="left:36%">
-            <div class="unit__hp"><div class="unit__hp-fill" id="player-hp-fill"></div></div>
-            <div class="unit__sprite">🥷</div>
-            <div class="unit__label">플레이어</div>
-          </div>
-
-          <div class="unit unit--enemy" id="enemy-slot-0" style="left:66%">
-            <div class="unit__hp"><div class="unit__hp-fill" id="monster-hp-fill"></div></div>
-            <div class="unit__sprite">👹</div>
-            <div class="unit__label">몬스터</div>
-          </div>
-
-          <div class="unit unit--enemy" id="enemy-slot-1" style="left:79%" hidden>
-            <div class="unit__hp"><div class="unit__hp-fill" style="width:100%"></div></div>
-            <div class="unit__sprite">👹</div>
-            <div class="unit__label">몬스터</div>
-          </div>
-
-          <div class="unit unit--enemy" id="enemy-slot-2" style="left:92%" hidden>
-            <div class="unit__hp"><div class="unit__hp-fill" style="width:100%"></div></div>
-            <div class="unit__sprite">👹</div>
-            <div class="unit__label">몬스터</div>
-          </div>
+          <canvas id="battlefield-canvas"></canvas>
         </div>
 
         <div class="retreat-banner" id="retreat-banner" hidden>후퇴 중... 체력을 회복하고 있습니다</div>
@@ -100,7 +73,9 @@ export function initRenderer(container, {
 
         <ul class="combat-log" id="combat-log"></ul>
       </section>
+     </div>
 
+     <div class="game__right">
       <section class="style-selector" id="style-selector"></section>
 
       <section class="stat-panel" id="stat-panel"></section>
@@ -124,15 +99,14 @@ export function initRenderer(container, {
         <button type="button" id="import-btn">가져오기</button>
         <button type="button" id="reset-btn">초기화</button>
       </footer>
+     </div>
     </div>
   `;
 
   const refs = {
     amountEl: container.querySelector('#resource-amount'),
     stageLabelEl: container.querySelector('#stage-label'),
-    monsterHpFillEl: container.querySelector('#monster-hp-fill'),
-    playerHpFillEl: container.querySelector('#player-hp-fill'),
-    extraEnemySlotEls: [container.querySelector('#enemy-slot-1'), container.querySelector('#enemy-slot-2')],
+    battlefieldCanvasEl: container.querySelector('#battlefield-canvas'),
     retreatBannerEl: container.querySelector('#retreat-banner'),
     farmingToggleBtn: container.querySelector('#farming-toggle-btn'),
     combatLogEl: container.querySelector('#combat-log'),
@@ -288,27 +262,11 @@ export function renderResourceAmount(refs, state, primaryResourceId) {
 }
 
 export function renderCombatState(refs, state) {
-  const monster = getMonsterSnapshot(state);
-  const derived = getDerivedStats(state);
-
   const isFarming = state.combat.farmingMode;
   const stageLabelText = isFarming
     ? `몬스터 Lv.${state.combat.monsterLevel} · 파밍 중`
     : `몬스터 Lv.${state.combat.monsterLevel}`;
   if (refs.stageLabelEl.textContent !== stageLabelText) refs.stageLabelEl.textContent = stageLabelText;
-
-  const monsterHp = Math.max(0, state.combat.monsterCurrentHp);
-  const monsterHpPct = Math.max(0, Math.min(100, (monsterHp / monster.maxHp) * 100));
-  refs.monsterHpFillEl.style.width = `${monsterHpPct}%`;
-
-  const playerHp = Math.max(0, state.combat.playerCurrentHp);
-  const playerHpPct = Math.max(0, Math.min(100, (playerHp / derived.maxHp) * 100));
-  refs.playerHpFillEl.style.width = `${playerHpPct}%`;
-
-  const extraCount = state.combat.extraEnemies.length;
-  refs.extraEnemySlotEls.forEach((el, i) => {
-    el.hidden = i >= extraCount;
-  });
 
   refs.retreatBannerEl.hidden = !state.combat.isRetreating;
 
@@ -318,6 +276,21 @@ export function renderCombatState(refs, state) {
   for (const [styleId, btn] of refs.styleButtons) {
     btn.classList.toggle('is-active', styleId === state.combat.activeStyleId);
   }
+}
+
+// 전투화면 캔버스 렌더러(battlefieldCanvas.js)에 넘길 스냅샷 - HP는 0..1 비율로 정규화한다.
+export function getBattlefieldSnapshot(state) {
+  const monster = getMonsterSnapshot(state);
+  const derived = getDerivedStats(state);
+
+  const monsterHp = Math.max(0, state.combat.monsterCurrentHp);
+  const playerHp = Math.max(0, state.combat.playerCurrentHp);
+
+  return {
+    monsterHpPct: monster.maxHp > 0 ? monsterHp / monster.maxHp : 0,
+    playerHpPct: derived.maxHp > 0 ? playerHp / derived.maxHp : 0,
+    extraEnemyCount: state.combat.extraEnemies.length,
+  };
 }
 
 export function renderCombatLog(refs, logLines) {
@@ -435,3 +408,4 @@ export function renderLegacyState(refs, state, upgradeConfig, resourceConfig, { 
     }
   }
 }
+

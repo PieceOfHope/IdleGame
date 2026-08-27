@@ -40,6 +40,50 @@ body {
   gap: 16px;
 }
 
+.game__left,
+.game__right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 넓은 화면(데스크톱)에서는 좌: 전투화면 / 우: 스탯·업그레이드의 2단 구성으로 바꿔
+   페이지 전체 스크롤 없이 한 화면에 담는다 - 우측 패널만 자체적으로 스크롤된다. */
+@media (min-width: 860px) {
+  #app {
+    max-width: 960px;
+  }
+
+  .game {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    align-items: start;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .game__left {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .game__left .battle-screen {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .game__left .battlefield {
+    flex: 1;
+    min-height: 220px;
+  }
+
+  .game__right {
+    height: 100%;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+}
+
 .game__header h1 {
   font-size: 1.25rem;
   text-align: center;
@@ -178,65 +222,10 @@ body {
   overflow: hidden;
 }
 
-.unit {
-  position: absolute;
-  bottom: 40%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  transform: translateX(-50%);
-}
-
-.unit__hp {
-  width: 44px;
-  height: 6px;
-  background: var(--color-panel-alt);
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.unit__hp-fill {
-  height: 100%;
+.battlefield canvas {
   width: 100%;
-  background: var(--color-danger);
-  transition: width 0.15s ease;
-}
-
-.unit__sprite {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--color-panel);
-  border: 2px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-}
-
-.unit--enemy .unit__sprite {
-  border-color: var(--color-danger);
-}
-
-.unit--player .unit__sprite {
-  border-color: var(--color-accent);
-}
-
-.unit__sprite--aura::after {
-  content: '';
-  position: absolute;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(74, 158, 255, 0.35), transparent 70%);
-  z-index: -1;
-}
-
-.unit__label {
-  font-size: 0.65rem;
-  color: var(--color-text-muted);
+  height: 100%;
+  display: block;
 }
 
 .retreat-banner {
@@ -286,6 +275,12 @@ body {
   background: var(--color-auto-on);
   border-color: var(--color-auto-on);
   color: #0f1115;
+  animation: ctrl-btn-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ctrl-btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(91, 201, 91, 0.5); }
+  50% { box-shadow: 0 0 14px 4px rgba(91, 201, 91, 0.55); }
 }
 
 .ctrl-btn--skill.is-active {
