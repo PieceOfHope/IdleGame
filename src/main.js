@@ -256,10 +256,7 @@ const loop = createGameLoop({
       characterLevel: getCharacterLevel(state),
     });
     if (GAME_CONFIG.LEGACY_PRODUCTION_ENABLED) {
-      Renderer.renderLegacyState(refs, state, UPGRADE_CONFIG, RESOURCE_CONFIG, {
-        rps: computeLegacyRPS(),
-        buyQuantity,
-      });
+      Renderer.renderLegacyState(refs, state, UPGRADE_CONFIG, RESOURCE_CONFIG, { buyQuantity });
     }
   },
 });

@@ -39,7 +39,6 @@ export function simulateOfflineKills(state, effectiveTimeSeconds) {
     const timeToKillSeconds = currentHp / playerDps;
     if (timeToKillSeconds > remainingSeconds) {
       currentHp -= playerDps * remainingSeconds;
-      remainingSeconds = 0;
       break;
     }
 

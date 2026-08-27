@@ -456,7 +456,7 @@ export function renderPermanentUpgradePanel(refs, state, permanentUpgradeConfig,
   }
 }
 
-export function renderLegacyState(refs, state, upgradeConfig, resourceConfig, { rps, buyQuantity }) {
+export function renderLegacyState(refs, state, upgradeConfig, resourceConfig, { buyQuantity }) {
   if (!refs.legacy) return;
 
   for (const upgradeDef of upgradeConfig) {
