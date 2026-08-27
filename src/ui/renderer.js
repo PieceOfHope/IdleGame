@@ -1,6 +1,12 @@
 import { formatNumber } from '../systems/resourceSystem.js';
 import { isUnlocked, getBulkCost, getMaxAffordableQuantity } from '../systems/upgradeSystem.js';
-import { getStatLevel, getStatUsesUntilNextLevel, getDerivedStats } from '../systems/characterSystem.js';
+import {
+  getStatLevel,
+  getDerivedStats,
+  getCharacterLevel,
+  getCharacterExpProgressPct,
+  getUnspentStatPoints,
+} from '../systems/characterSystem.js';
 import { getMasteryLevel, getMasteryUsesUntilNextLevel } from '../systems/masterySystem.js';
 import { getMonsterSnapshot } from '../systems/combatSystem.js';
 import {
@@ -31,6 +37,8 @@ export function initRenderer(container, {
   onBuyQuantityChange,
   onStyleSelect,
   onFarmingToggle,
+  onStatIncrease,
+  onStatDecrease,
   onPermanentPurchase,
   onPermanentBuyQuantityChange,
   onExport,
@@ -78,6 +86,12 @@ export function initRenderer(container, {
      <div class="game__right">
       <section class="style-selector" id="style-selector"></section>
 
+      <section class="character-level-panel">
+        <div class="character-level-panel__level">Lv. <span id="character-level">1</span></div>
+        <div class="character-level-panel__exp-bar"><div class="character-level-panel__exp-fill" id="character-exp-fill"></div></div>
+        <div class="character-level-panel__points">배분 가능 포인트: <span id="unspent-points">0</span></div>
+      </section>
+
       <section class="stat-panel" id="stat-panel"></section>
       <section class="mastery-panel" id="mastery-panel"></section>
 
@@ -111,6 +125,9 @@ export function initRenderer(container, {
     farmingToggleBtn: container.querySelector('#farming-toggle-btn'),
     combatLogEl: container.querySelector('#combat-log'),
     lastRenderedLogKey: null,
+    characterLevelEl: container.querySelector('#character-level'),
+    characterExpFillEl: container.querySelector('#character-exp-fill'),
+    unspentPointsEl: container.querySelector('#unspent-points'),
     styleButtons: new Map(),
     statRows: new Map(),
     masteryRows: new Map(),
@@ -145,12 +162,20 @@ export function initRenderer(container, {
     row.innerHTML = `
       <div class="stat-row__name">${statDef.name}</div>
       <div class="stat-row__level">Lv. <span class="level-value">0</span></div>
-      <div class="stat-row__next">다음까지 <span class="next-value">-</span></div>
+      <div class="stat-row__points">
+        <button type="button" class="stat-point-btn stat-point-btn--minus">-</button>
+        <button type="button" class="stat-point-btn stat-point-btn--plus">+</button>
+      </div>
     `;
+    const minusBtn = row.querySelector('.stat-point-btn--minus');
+    const plusBtn = row.querySelector('.stat-point-btn--plus');
+    minusBtn.addEventListener('click', () => onStatDecrease(statDef.id));
+    plusBtn.addEventListener('click', () => onStatIncrease(statDef.id));
     statPanelEl.appendChild(row);
     refs.statRows.set(statDef.id, {
       levelEl: row.querySelector('.level-value'),
-      nextEl: row.querySelector('.next-value'),
+      minusBtn,
+      plusBtn,
       lastRendered: {},
     });
   }
@@ -301,7 +326,22 @@ export function renderCombatLog(refs, logLines) {
   refs.combatLogEl.innerHTML = logLines.map((line) => `<li>${line}</li>`).join('');
 }
 
+export function renderCharacterLevel(refs, state) {
+  const level = getCharacterLevel(state);
+  if (refs.characterLevelEl.textContent !== String(level)) {
+    refs.characterLevelEl.textContent = String(level);
+  }
+
+  refs.characterExpFillEl.style.width = `${getCharacterExpProgressPct(state) * 100}%`;
+
+  const unspent = getUnspentStatPoints(state);
+  if (refs.unspentPointsEl.textContent !== String(unspent)) {
+    refs.unspentPointsEl.textContent = String(unspent);
+  }
+}
+
 export function renderStatPanel(refs, state, statConfig) {
+  const unspent = getUnspentStatPoints(state);
   for (const statDef of statConfig) {
     const rowRefs = refs.statRows.get(statDef.id);
     const level = getStatLevel(state, statDef.id);
@@ -309,10 +349,13 @@ export function renderStatPanel(refs, state, statConfig) {
       rowRefs.levelEl.textContent = String(level);
       rowRefs.lastRendered.level = level;
     }
-    const untilNext = getStatUsesUntilNextLevel(state, statDef.id);
-    if (rowRefs.lastRendered.untilNext !== untilNext) {
-      rowRefs.nextEl.textContent = String(Math.ceil(untilNext));
-      rowRefs.lastRendered.untilNext = untilNext;
+    if (rowRefs.lastRendered.minusDisabled !== (level <= 0)) {
+      rowRefs.minusBtn.disabled = level <= 0;
+      rowRefs.lastRendered.minusDisabled = level <= 0;
+    }
+    if (rowRefs.lastRendered.plusDisabled !== (unspent <= 0)) {
+      rowRefs.plusBtn.disabled = unspent <= 0;
+      rowRefs.lastRendered.plusDisabled = unspent <= 0;
     }
   }
 }

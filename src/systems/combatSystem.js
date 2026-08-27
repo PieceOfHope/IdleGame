@@ -1,7 +1,7 @@
 import { getMonsterForLevel, MONSTER_BALANCE } from '../config/monsterConfig.js';
 import { MASTERY_CONFIG } from '../config/masteryConfig.js';
 import { RETREAT_DURATION_MS } from '../config/characterConfig.js';
-import { getDerivedStats, getPhysicalDamage, getMagicDamage, addStatUsage } from './characterSystem.js';
+import { getDerivedStats, getPhysicalDamage, getMagicDamage, addCharacterExp } from './characterSystem.js';
 import { getMasteryDamageMultiplier, getMasteryLevel, addMasteryUsage } from './masterySystem.js';
 import { addResource } from './resourceSystem.js';
 
@@ -157,7 +157,8 @@ function damageMonster(state, damage, onEvent) {
 
   const defeatedMonster = getMonsterForLevel(combat.monsterLevel);
   addResource(state, 'gold', defeatedMonster.goldReward);
-  onEvent({ type: 'monster-defeated', level: combat.monsterLevel, reward: defeatedMonster.goldReward });
+  addCharacterExp(state, defeatedMonster.expReward);
+  onEvent({ type: 'monster-defeated', level: combat.monsterLevel, reward: defeatedMonster.goldReward, exp: defeatedMonster.expReward });
 
   promoteNextEnemy(state);
 }
@@ -183,7 +184,6 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
 
   if (combat.playerCurrentHp < derived.maxHp) {
     combat.playerCurrentHp = Math.min(derived.maxHp, combat.playerCurrentHp + derived.hpRegenPerSec * dtSeconds);
-    addStatUsage(state, 'recovery', dtSeconds);
   }
 
   if (combat.dotRemainingMs > 0) {
@@ -201,8 +201,6 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
     const baseDamage = getBaseAttackDamage(state, styleDef);
     const finalDamage = applyStyleTrait(state, styleDef, baseDamage, onEvent);
     addMasteryUsage(state, styleDef.id, 1);
-    addStatUsage(state, styleDef.category === 'physical' ? 'str' : 'int', 1);
-    addStatUsage(state, 'agi', 1);
     onEvent({ type: 'player-attack', damage: finalDamage, styleId: styleDef.id });
 
     damageMonster(state, finalDamage, onEvent);
@@ -225,7 +223,6 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
     }
 
     combat.playerCurrentHp -= monsterDamage;
-    addStatUsage(state, 'vit', 1);
     onEvent({ type: 'monster-attack', damage: monsterDamage });
 
     if (combat.playerCurrentHp <= 0) {
@@ -247,7 +244,6 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
     enemy.attackElapsedMs -= enemyDef.attackIntervalMs;
 
     combat.playerCurrentHp -= enemyDef.attackDamage;
-    addStatUsage(state, 'vit', 1);
     onEvent({ type: 'monster-attack', damage: enemyDef.attackDamage });
 
     if (combat.playerCurrentHp <= 0) {

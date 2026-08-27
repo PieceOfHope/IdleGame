@@ -1,5 +1,5 @@
-import { levelFromUsage, usesUntilNextLevel } from './masteryCurve.js';
-import { STAT_LEVEL_COEFFICIENT, CHARACTER_BALANCE } from '../config/characterConfig.js';
+import { levelFromUsage, usageRequiredForLevel } from './masteryCurve.js';
+import { STAT_CONFIG, CHARACTER_LEVEL_COEFFICIENT, STAT_POINTS_PER_LEVEL, CHARACTER_BALANCE } from '../config/characterConfig.js';
 import { PERMANENT_UPGRADE_CONFIG } from '../config/permanentUpgradeConfig.js';
 import { getPermanentUpgradeLevel } from './permanentUpgradeSystem.js';
 
@@ -9,18 +9,53 @@ function getPermanentBonus(state, upgradeId) {
   return getPermanentUpgradeLevel(state, upgradeId) * def.bonusPerLevel;
 }
 
+// 힘/민첩성/지력/체력/회복력은 "숙련도"가 아니라 "스탯"이라 사용 횟수로 자동 성장하지 않는다.
+// 캐릭터 레벨업 시 지급되는 포인트를 플레이어가 직접 배분(증가/재분배)한다.
+export function getCharacterLevel(state) {
+  return levelFromUsage(state.character.totalExp, CHARACTER_LEVEL_COEFFICIENT);
+}
+
+export function getCharacterExpUntilNextLevel(state) {
+  const currentLevel = getCharacterLevel(state);
+  return Math.max(0, Math.ceil(usageRequiredForLevel(currentLevel + 1, CHARACTER_LEVEL_COEFFICIENT) - state.character.totalExp));
+}
+
+// 현재 레벨 구간 안에서의 진행률 (0..1) - EXP 바 표시용.
+export function getCharacterExpProgressPct(state) {
+  const currentLevel = getCharacterLevel(state);
+  const expForCurrentLevel = usageRequiredForLevel(currentLevel, CHARACTER_LEVEL_COEFFICIENT);
+  const expForNextLevel = usageRequiredForLevel(currentLevel + 1, CHARACTER_LEVEL_COEFFICIENT);
+  const span = expForNextLevel - expForCurrentLevel;
+  if (span <= 0) return 0;
+  return Math.max(0, Math.min(1, (state.character.totalExp - expForCurrentLevel) / span));
+}
+
+export function addCharacterExp(state, amount) {
+  state.character.totalExp += amount;
+}
+
+function getTotalAllocatedPoints(state) {
+  return STAT_CONFIG.reduce((sum, statDef) => sum + (state.character.allocatedStatPoints[statDef.id] ?? 0), 0);
+}
+
+export function getUnspentStatPoints(state) {
+  return Math.max(0, getCharacterLevel(state) * STAT_POINTS_PER_LEVEL - getTotalAllocatedPoints(state));
+}
+
 export function getStatLevel(state, statId) {
-  return levelFromUsage(state.character.stats[statId]?.totalUses ?? 0, STAT_LEVEL_COEFFICIENT);
+  return state.character.allocatedStatPoints[statId] ?? 0;
 }
 
-export function getStatUsesUntilNextLevel(state, statId) {
-  return usesUntilNextLevel(state.character.stats[statId]?.totalUses ?? 0, STAT_LEVEL_COEFFICIENT);
+export function allocateStatPoint(state, statId) {
+  if (getUnspentStatPoints(state) <= 0) return;
+  if (!(statId in state.character.allocatedStatPoints)) return;
+  state.character.allocatedStatPoints[statId] += 1;
 }
 
-export function addStatUsage(state, statId, amount = 1) {
-  const stat = state.character.stats[statId];
-  if (!stat) return;
-  stat.totalUses += amount;
+export function deallocateStatPoint(state, statId) {
+  const current = state.character.allocatedStatPoints[statId] ?? 0;
+  if (current <= 0) return;
+  state.character.allocatedStatPoints[statId] -= 1;
 }
 
 export function getDerivedStats(state) {

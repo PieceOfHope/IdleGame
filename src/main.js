@@ -11,7 +11,7 @@ import { createGameLoop } from './core/gameLoop.js';
 import * as ResourceSystem from './systems/resourceSystem.js';
 import * as UpgradeSystem from './systems/upgradeSystem.js';
 import * as PermanentUpgradeSystem from './systems/permanentUpgradeSystem.js';
-import { getDerivedStats } from './systems/characterSystem.js';
+import { getDerivedStats, allocateStatPoint, deallocateStatPoint } from './systems/characterSystem.js';
 import { advanceCombat, setActiveStyle, setFarmingMode } from './systems/combatSystem.js';
 import { simulateOfflineKills } from './systems/offlineSettlement.js';
 import * as Renderer from './ui/renderer.js';
@@ -174,6 +174,12 @@ const refs = Renderer.initRenderer(appRoot, {
   onFarmingToggle: () => {
     setFarmingMode(state, !state.combat.farmingMode);
   },
+  onStatIncrease: (statId) => {
+    allocateStatPoint(state, statId);
+  },
+  onStatDecrease: (statId) => {
+    deallocateStatPoint(state, statId);
+  },
   onPermanentPurchase: (upgradeId) => {
     const upgradeDef = PERMANENT_UPGRADE_CONFIG.find((u) => u.id === upgradeId);
     if (!upgradeDef) return;
@@ -234,6 +240,7 @@ const loop = createGameLoop({
     Renderer.renderCombatState(refs, state);
     battlefield.setSnapshot(Renderer.getBattlefieldSnapshot(state));
     Renderer.renderCombatLog(refs, combatLog);
+    Renderer.renderCharacterLevel(refs, state);
     Renderer.renderStatPanel(refs, state, STAT_CONFIG);
     Renderer.renderMasteryPanel(refs, state, MASTERY_CONFIG);
     Renderer.renderPermanentUpgradePanel(refs, state, PERMANENT_UPGRADE_CONFIG, { buyQuantity: permanentBuyQuantity });

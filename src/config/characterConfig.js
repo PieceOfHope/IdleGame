@@ -6,7 +6,10 @@ export const STAT_CONFIG = [
   { id: 'recovery', name: '회복력' },
 ];
 
-export const STAT_LEVEL_COEFFICIENT = 0.6;
+// 캐릭터 레벨 = CHARACTER_LEVEL_COEFFICIENT * sqrt(누적 경험치) (masteryCurve.js와 동일한 제곱근 곡선).
+// 정확한 페이스는 추후 밸런싱 대상 (Document/TODO.md #3 참고) - 우선 임시값.
+export const CHARACTER_LEVEL_COEFFICIENT = 0.5;
+export const STAT_POINTS_PER_LEVEL = 5;
 
 export const CHARACTER_BALANCE = {
   baseHp: 50,
