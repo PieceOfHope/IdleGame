@@ -12,7 +12,8 @@ import * as ResourceSystem from './systems/resourceSystem.js';
 import * as UpgradeSystem from './systems/upgradeSystem.js';
 import * as PermanentUpgradeSystem from './systems/permanentUpgradeSystem.js';
 import { getDerivedStats, getCharacterLevel, allocateStatPoint, deallocateStatPoint, addCharacterExp } from './systems/characterSystem.js';
-import { advanceCombat, setActiveStyle, setFarmingMode } from './systems/combatSystem.js';
+import { advanceCombat, setActiveWeapon, setActiveMagic, setFarmingMode, castSkill } from './systems/combatSystem.js';
+import { getPendingSkillChoice, chooseSkill } from './systems/skillSystem.js';
 import { simulateOfflineKills } from './systems/offlineSettlement.js';
 import * as Renderer from './ui/renderer.js';
 import { createBattlefieldRenderer } from './ui/battlefieldCanvas.js';
@@ -70,7 +71,30 @@ function handleCombatEvent(event) {
     case 'enemy-stacked':
       pushCombatLog(`몬스터 Lv.${event.level}가 추가로 나타났습니다!`);
       break;
+    case 'skill-cast':
+      pushCombatLog(`${event.name} 시전!`);
+      battlefield.triggerAttack('player');
+      break;
   }
+}
+
+let skillChoiceModalOpen = false;
+
+function checkPendingSkillChoice() {
+  if (skillChoiceModalOpen) return;
+  const pending = getPendingSkillChoice(state);
+  if (!pending) return;
+
+  skillChoiceModalOpen = true;
+  Modal.showSkillChoiceModal(modalRoot, {
+    masteryId: pending.masteryId,
+    masteryName: MASTERY_CONFIG.find((m) => m.id === pending.masteryId)?.name ?? pending.masteryId,
+    candidates: pending.candidates,
+    onChoose: (skillId) => {
+      chooseSkill(state, pending.masteryId, skillId);
+      skillChoiceModalOpen = false;
+    },
+  });
 }
 
 function computeLegacyRPS() {
@@ -174,11 +198,20 @@ const refs = Renderer.initRenderer(appRoot, {
   onBuyQuantityChange: (qty) => {
     buyQuantity = qty;
   },
-  onStyleSelect: (styleId) => {
-    setActiveStyle(state, styleId);
+  onWeaponSelect: (weaponId) => {
+    setActiveWeapon(state, weaponId);
+  },
+  onMagicSelect: (magicId) => {
+    setActiveMagic(state, magicId);
   },
   onFarmingToggle: () => {
     setFarmingMode(state, !state.combat.farmingMode);
+  },
+  onSkillCast: (skillId) => {
+    castSkill(state, skillId, handleCombatEvent);
+  },
+  onAutoCastToggle: () => {
+    state.combat.autoCastSkills = !state.combat.autoCastSkills;
   },
   onStatIncrease: (statId) => {
     allocateStatPoint(state, statId);
@@ -245,8 +278,10 @@ const loop = createGameLoop({
     advanceCombat(state, dtSeconds * 1000, handleCombatEvent);
   },
   onRender: () => {
+    checkPendingSkillChoice();
     Renderer.renderResourceAmount(refs, state, primaryResourceId);
     Renderer.renderCombatState(refs, state);
+    Renderer.renderSkillBar(refs, state);
     battlefield.setSnapshot(Renderer.getBattlefieldSnapshot(state));
     Renderer.renderCombatLog(refs, combatLog);
     Renderer.renderCharacterLevel(refs, state);

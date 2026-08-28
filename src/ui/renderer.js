@@ -9,6 +9,7 @@ import {
   getStatPreview,
 } from '../systems/characterSystem.js';
 import { getMasteryLevel, getMasteryUsesUntilNextLevel } from '../systems/masterySystem.js';
+import { getEquippedSkillDefs } from '../systems/skillSystem.js';
 import { getMonsterSnapshot } from '../systems/combatSystem.js';
 import {
   getPermanentUpgradeLevel,
@@ -37,12 +38,15 @@ export function initRenderer(container, {
   onGather,
   onPurchase,
   onBuyQuantityChange,
-  onStyleSelect,
+  onWeaponSelect,
+  onMagicSelect,
   onFarmingToggle,
   onStatIncrease,
   onStatDecrease,
   onPermanentPurchase,
   onPermanentBuyQuantityChange,
+  onSkillCast,
+  onAutoCastToggle,
   onExport,
   onImport,
   onReset,
@@ -69,10 +73,11 @@ export function initRenderer(container, {
         <div class="retreat-banner" id="retreat-banner" hidden>후퇴 중... 체력을 회복하고 있습니다</div>
 
         <footer class="control-bar">
-          <button type="button" class="ctrl-btn ctrl-btn--auto" id="farming-toggle-btn">자동<br>꺼짐</button>
-          <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🔥</button>
-          <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🛡️</button>
-          <button type="button" class="ctrl-btn ctrl-btn--skill" data-toggle>🏹</button>
+          <div class="control-bar__toggles">
+            <button type="button" class="ctrl-btn ctrl-btn--auto" id="farming-toggle-btn">파밍<br>꺼짐</button>
+            <button type="button" class="ctrl-btn ctrl-btn--auto" id="skill-auto-toggle-btn">스킬<br>자동</button>
+          </div>
+          <div class="control-bar__skills" id="skill-bar"></div>
         </footer>
 
         <ul class="combat-log" id="combat-log"></ul>
@@ -144,6 +149,8 @@ export function initRenderer(container, {
     battlefieldCanvasEl: container.querySelector('#battlefield-canvas'),
     retreatBannerEl: container.querySelector('#retreat-banner'),
     farmingToggleBtn: container.querySelector('#farming-toggle-btn'),
+    skillAutoToggleBtn: container.querySelector('#skill-auto-toggle-btn'),
+    skillSlots: [],
     combatLogEl: container.querySelector('#combat-log'),
     lastRenderedLogKey: null,
     characterLevelEl: container.querySelector('#character-level'),
@@ -161,10 +168,28 @@ export function initRenderer(container, {
   };
 
   refs.farmingToggleBtn.addEventListener('click', onFarmingToggle);
+  refs.skillAutoToggleBtn.addEventListener('click', onAutoCastToggle);
 
-  container.querySelectorAll('.ctrl-btn--skill[data-toggle]').forEach((btn) => {
-    btn.addEventListener('click', () => btn.classList.toggle('is-active'));
-  });
+  const skillBarEl = container.querySelector('#skill-bar');
+  for (let i = 0; i < 4; i += 1) {
+    const slot = document.createElement('button');
+    slot.type = 'button';
+    slot.className = 'skill-slot skill-slot--empty';
+    slot.innerHTML = `
+      <span class="skill-slot__name"></span>
+      <span class="skill-slot__cooldown"></span>
+    `;
+    slot.addEventListener('click', () => {
+      if (slot.dataset.skillId) onSkillCast(slot.dataset.skillId);
+    });
+    skillBarEl.appendChild(slot);
+    refs.skillSlots.push({
+      root: slot,
+      nameEl: slot.querySelector('.skill-slot__name'),
+      cooldownEl: slot.querySelector('.skill-slot__cooldown'),
+      lastRendered: {},
+    });
+  }
 
   container.querySelector('#export-btn').addEventListener('click', onExport);
   container.querySelector('#import-btn').addEventListener('click', onImport);
@@ -205,7 +230,10 @@ export function initRenderer(container, {
       <div class="mastery-row__level">Lv. <span class="level-value">0</span></div>
       <div class="mastery-row__next">다음까지 <span class="next-value">-</span></div>
     `;
-    row.addEventListener('click', () => onStyleSelect(masteryDef.id));
+    row.addEventListener('click', () => {
+      if (masteryDef.category === 'physical') onWeaponSelect(masteryDef.id);
+      else onMagicSelect(masteryDef.id);
+    });
     masteryPanelEl.appendChild(row);
     refs.masteryRows.set(masteryDef.id, {
       root: row,
@@ -321,15 +349,68 @@ export function renderCombatState(refs, state) {
 
   if (cache.isFarming !== isFarming) {
     refs.farmingToggleBtn.classList.toggle('is-active', isFarming);
-    refs.farmingToggleBtn.innerHTML = isFarming ? '자동<br>켜짐' : '자동<br>꺼짐';
+    refs.farmingToggleBtn.innerHTML = isFarming ? '파밍<br>켜짐' : '파밍<br>꺼짐';
     cache.isFarming = isFarming;
   }
 
-  if (cache.activeStyleId !== state.combat.activeStyleId) {
+  const autoCastSkills = state.combat.autoCastSkills;
+  if (cache.autoCastSkills !== autoCastSkills) {
+    refs.skillAutoToggleBtn.classList.toggle('is-active', autoCastSkills);
+    refs.skillAutoToggleBtn.innerHTML = autoCastSkills ? '스킬<br>자동' : '스킬<br>수동';
+    cache.autoCastSkills = autoCastSkills;
+  }
+
+  if (cache.activeWeaponId !== state.combat.activeWeaponId || cache.activeMagicId !== state.combat.activeMagicId) {
     for (const [masteryId, rowRefs] of refs.masteryRows) {
-      rowRefs.root.classList.toggle('is-active', masteryId === state.combat.activeStyleId);
+      const isActive = masteryId === state.combat.activeWeaponId || masteryId === state.combat.activeMagicId;
+      rowRefs.root.classList.toggle('is-active', isActive);
     }
-    cache.activeStyleId = state.combat.activeStyleId;
+    cache.activeWeaponId = state.combat.activeWeaponId;
+    cache.activeMagicId = state.combat.activeMagicId;
+  }
+}
+
+export function renderSkillBar(refs, state) {
+  const combat = state.combat;
+  const equipped = getEquippedSkillDefs(state);
+
+  for (let i = 0; i < refs.skillSlots.length; i += 1) {
+    const slot = refs.skillSlots[i];
+    const skill = equipped[i];
+
+    if (!skill) {
+      if (slot.lastRendered.skillId !== null) {
+        slot.root.classList.add('skill-slot--empty');
+        slot.root.classList.remove('is-cooldown');
+        slot.root.title = '';
+        slot.root.dataset.skillId = '';
+        slot.nameEl.textContent = '';
+        slot.cooldownEl.textContent = '';
+        slot.lastRendered = { skillId: null };
+      }
+      continue;
+    }
+
+    if (slot.lastRendered.skillId !== skill.id) {
+      slot.root.classList.remove('skill-slot--empty');
+      slot.root.title = skill.description;
+      slot.root.dataset.skillId = skill.id;
+      slot.nameEl.textContent = skill.name;
+      slot.lastRendered.skillId = skill.id;
+    }
+
+    const remainingMs = combat.skillCooldowns[skill.id] ?? 0;
+    const cooldownText = remainingMs > 0 ? `${(remainingMs / 1000).toFixed(1)}s` : '';
+    if (slot.lastRendered.cooldownText !== cooldownText) {
+      slot.cooldownEl.textContent = cooldownText;
+      slot.lastRendered.cooldownText = cooldownText;
+    }
+
+    const onCooldown = remainingMs > 0;
+    if (slot.lastRendered.onCooldown !== onCooldown) {
+      slot.root.classList.toggle('is-cooldown', onCooldown);
+      slot.lastRendered.onCooldown = onCooldown;
+    }
   }
 }
 

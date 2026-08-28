@@ -10,10 +10,11 @@ import {
   getExpGainMultiplier,
 } from './characterSystem.js';
 import { getMasteryDamageMultiplier, getMasteryLevel, addMasteryUsage } from './masterySystem.js';
+import { getEquippedSkillDefs } from './skillSystem.js';
 import { addResource } from './resourceSystem.js';
 
-function getActiveStyleDef(state) {
-  return MASTERY_CONFIG.find((m) => m.id === state.combat.activeStyleId) ?? MASTERY_CONFIG[0];
+function getWeaponDef(state) {
+  return MASTERY_CONFIG.find((m) => m.id === state.combat.activeWeaponId) ?? MASTERY_CONFIG.find((m) => m.category === 'physical');
 }
 
 function getBaseAttackDamage(state, styleDef) {
@@ -86,9 +87,14 @@ function getAttackIntervalMs(state, styleDef, derived) {
   return derived.attackIntervalMs * (1 - reduction);
 }
 
-export function setActiveStyle(state, styleId) {
-  if (!MASTERY_CONFIG.some((m) => m.id === styleId)) return;
-  state.combat.activeStyleId = styleId;
+export function setActiveWeapon(state, weaponId) {
+  if (!MASTERY_CONFIG.some((m) => m.id === weaponId && m.category === 'physical')) return;
+  state.combat.activeWeaponId = weaponId;
+}
+
+export function setActiveMagic(state, magicId) {
+  if (!MASTERY_CONFIG.some((m) => m.id === magicId && m.category === 'magic')) return;
+  state.combat.activeMagicId = magicId;
 }
 
 export function setFarmingMode(state, enabled) {
@@ -110,7 +116,7 @@ export function getMonsterSnapshot(state) {
 // 오프라인 정산(DPS 기반)에 사용하는 기대 초당 데미지. 확률형 특성(치명타)은 기대값으로,
 // 화상은 "계속 갱신되어 상시 적용된다"고 가정한 근사치로 반영한다.
 export function getExpectedPlayerDps(state) {
-  const styleDef = getActiveStyleDef(state);
+  const styleDef = getWeaponDef(state);
   const derived = getDerivedStats(state);
   const attackIntervalMs = getAttackIntervalMs(state, styleDef, derived);
   const baseDamage = getBaseAttackDamage(state, styleDef);
@@ -160,10 +166,10 @@ function promoteNextEnemy(state) {
 }
 
 // 몬스터에게 데미지를 적용하고, 처치 시 골드 지급 및 다음 전개(파밍/진행)를 처리한다.
-// 플레이어의 직접 공격과 화상(DoT) 틱이 공유하는 처치 판정 로직.
+// 플레이어의 직접 공격, 화상(DoT) 틱, 스킬이 모두 공유하는 처치 판정 로직.
 function damageMonster(state, damage, onEvent) {
   const combat = state.combat;
-  combat.monsterCurrentHp -= damage;
+  combat.monsterCurrentHp -= damage * (1 + combat.enemyDamageTakenBonusPct);
   if (combat.monsterCurrentHp > 0) return;
 
   const defeatedMonster = getMonsterForLevel(combat.monsterLevel);
@@ -179,8 +185,9 @@ function damageMonster(state, damage, onEvent) {
 // 앞 몬스터 전용 처리(약화 감소율 적용)는 호출측에서 damage를 계산한 뒤 넘긴다.
 function applyDamageToPlayer(state, derived, damage, onEvent) {
   const combat = state.combat;
-  combat.playerCurrentHp -= damage;
-  onEvent({ type: 'monster-attack', damage });
+  const finalDamage = damage * (1 - combat.playerDamageReductionPct);
+  combat.playerCurrentHp -= finalDamage;
+  onEvent({ type: 'monster-attack', damage: finalDamage });
 
   if (combat.playerCurrentHp <= 0) {
     // 후퇴하며 즉시 최대 체력으로 회복 - 전투는 retreatRemainingMs 동안만 멈춘다 (진행도 손실 없음).
@@ -189,6 +196,114 @@ function applyDamageToPlayer(state, derived, damage, onEvent) {
     combat.retreatRemainingMs = RETREAT_DURATION_MS;
     onEvent({ type: 'player-retreat' });
   }
+}
+
+function rollCrit(state, damage, onEvent) {
+  const permanentCritChance = getPermanentCritChance(state);
+  if (permanentCritChance <= 0 || Math.random() >= permanentCritChance) return damage;
+  const bonusDamage = damage * (CHARACTER_BALANCE.permanentCritMultiplier - 1);
+  onEvent({ type: 'critical-hit', bonusDamage });
+  return damage + bonusDamage;
+}
+
+// 스킬 하나의 effects 배열을 순서대로 실행한다. lifesteal은 같은 스킬 안에서 앞선 damage 계열
+// effect가 이미 낸 피해량(totalDamageDealt)을 기준으로 계산한다.
+function resolveSkillEffects(state, skillDef, onEvent) {
+  const combat = state.combat;
+  const derived = getDerivedStats(state);
+  const styleDef = MASTERY_CONFIG.find((m) => m.id === skillDef.masteryId);
+  const baseDamage = getBaseAttackDamage(state, styleDef);
+  let totalDamageDealt = 0;
+
+  for (const effect of skillDef.effects) {
+    switch (effect.kind) {
+      case 'damage': {
+        let dmg = applyStyleTrait(state, styleDef, baseDamage * effect.multiplier, onEvent);
+        if (effect.guaranteedCrit) {
+          const bonusDamage = dmg * (CHARACTER_BALANCE.permanentCritMultiplier - 1);
+          onEvent({ type: 'critical-hit', bonusDamage });
+          dmg += bonusDamage;
+        } else {
+          dmg = rollCrit(state, dmg, onEvent);
+        }
+        totalDamageDealt += dmg;
+        damageMonster(state, dmg, onEvent);
+        break;
+      }
+      case 'multiHit': {
+        for (let i = 0; i < effect.hits; i += 1) {
+          let dmg = applyStyleTrait(state, styleDef, baseDamage * effect.multiplierEach, onEvent);
+          dmg = rollCrit(state, dmg, onEvent);
+          totalDamageDealt += dmg;
+          damageMonster(state, dmg, onEvent);
+        }
+        break;
+      }
+      case 'dot': {
+        const totalDamage = baseDamage * effect.totalMultiplier;
+        combat.dotRemainingMs = effect.durationMs;
+        combat.dotDamagePerSec = totalDamage / (effect.durationMs / 1000);
+        break;
+      }
+      case 'heal': {
+        combat.pendingHeal += derived.maxHp * effect.pctMaxHp;
+        break;
+      }
+      case 'stunFront': {
+        const monster = getMonsterForLevel(combat.monsterLevel);
+        combat.monsterAttackElapsedMs -= monster.attackIntervalMs * (effect.extraDurationMultiplier ?? 1);
+        onEvent({ type: 'monster-stunned' });
+        break;
+      }
+      case 'stunAll': {
+        const monster = getMonsterForLevel(combat.monsterLevel);
+        combat.monsterAttackElapsedMs -= monster.attackIntervalMs;
+        for (const enemy of combat.extraEnemies) {
+          const enemyDef = getMonsterForLevel(enemy.level);
+          enemy.attackElapsedMs -= enemyDef.attackIntervalMs;
+        }
+        onEvent({ type: 'monster-stunned' });
+        break;
+      }
+      case 'debuffEnemyDamageTaken': {
+        combat.enemyDamageTakenBonusPct = effect.bonusPct;
+        combat.enemyDamageTakenRemainingMs = effect.durationMs;
+        onEvent({ type: 'monster-weakened' });
+        break;
+      }
+      case 'buffSelfDamageReduction': {
+        combat.playerDamageReductionPct = effect.pct;
+        combat.playerDamageReductionRemainingMs = effect.durationMs;
+        break;
+      }
+      case 'nullifyNextEnemyHit': {
+        combat.monsterNextHitReductionPct = 1;
+        onEvent({ type: 'monster-weakened' });
+        break;
+      }
+      case 'lifesteal': {
+        combat.pendingHeal += totalDamageDealt * effect.pct;
+        break;
+      }
+      default:
+        break;
+    }
+  }
+}
+
+export function castSkill(state, skillId, onEvent = () => {}) {
+  const combat = state.combat;
+  if (combat.isRetreating) return false;
+
+  const equipped = getEquippedSkillDefs(state).find((s) => s.id === skillId);
+  if (!equipped) return false;
+  if ((combat.skillCooldowns[skillId] ?? 0) > 0) return false;
+
+  combat.skillCooldowns[skillId] = equipped.cooldownMs;
+  addMasteryUsage(state, equipped.masteryId, 1);
+  onEvent({ type: 'skill-cast', skillId, name: equipped.name });
+  resolveSkillEffects(state, equipped, onEvent);
+  return true;
 }
 
 export function advanceCombat(state, dtMs, onEvent = () => {}) {
@@ -214,33 +329,50 @@ export function advanceCombat(state, dtMs, onEvent = () => {}) {
     combat.playerCurrentHp = Math.min(derived.maxHp, combat.playerCurrentHp + derived.hpRegenPerSec * dtSeconds);
   }
 
+  if (combat.enemyDamageTakenRemainingMs > 0) {
+    combat.enemyDamageTakenRemainingMs = Math.max(0, combat.enemyDamageTakenRemainingMs - dtMs);
+    if (combat.enemyDamageTakenRemainingMs === 0) combat.enemyDamageTakenBonusPct = 0;
+  }
+  if (combat.playerDamageReductionRemainingMs > 0) {
+    combat.playerDamageReductionRemainingMs = Math.max(0, combat.playerDamageReductionRemainingMs - dtMs);
+    if (combat.playerDamageReductionRemainingMs === 0) combat.playerDamageReductionPct = 0;
+  }
+
   if (combat.dotRemainingMs > 0) {
     damageMonster(state, combat.dotDamagePerSec * dtSeconds, onEvent);
     combat.dotRemainingMs = Math.max(0, combat.dotRemainingMs - dtMs);
   }
 
-  const styleDef = getActiveStyleDef(state);
-  const attackIntervalMs = getAttackIntervalMs(state, styleDef, derived);
+  // 평타는 장착한 무기로만 나간다 - 마법은 스킬 전용(Document/SkillSystemDesign.md 참고).
+  const weaponDef = getWeaponDef(state);
+  const attackIntervalMs = getAttackIntervalMs(state, weaponDef, derived);
 
   combat.playerAttackElapsedMs += dtMs;
   if (combat.playerAttackElapsedMs >= attackIntervalMs) {
     combat.playerAttackElapsedMs -= attackIntervalMs;
 
-    const baseDamage = getBaseAttackDamage(state, styleDef);
-    let finalDamage = applyStyleTrait(state, styleDef, baseDamage, onEvent);
+    const baseDamage = getBaseAttackDamage(state, weaponDef);
+    let finalDamage = applyStyleTrait(state, weaponDef, baseDamage, onEvent);
+    finalDamage = rollCrit(state, finalDamage, onEvent);
 
-    // '치명타 강화' 영구강화 - 스타일 고유 치명타 특성(활 등)과 별개로 항상 판정된다.
-    const permanentCritChance = getPermanentCritChance(state);
-    if (permanentCritChance > 0 && Math.random() < permanentCritChance) {
-      const bonusDamage = finalDamage * (CHARACTER_BALANCE.permanentCritMultiplier - 1);
-      finalDamage += bonusDamage;
-      onEvent({ type: 'critical-hit', bonusDamage });
-    }
-
-    addMasteryUsage(state, styleDef.id, 1);
-    onEvent({ type: 'player-attack', damage: finalDamage, styleId: styleDef.id });
+    addMasteryUsage(state, weaponDef.id, 1);
+    onEvent({ type: 'player-attack', damage: finalDamage, styleId: weaponDef.id });
 
     damageMonster(state, finalDamage, onEvent);
+  }
+
+  // 스킬 쿨다운 감소 + (자동 시전이 켜져있으면) 준비된 스킬을 자동으로 시전한다.
+  for (const skillId of Object.keys(combat.skillCooldowns)) {
+    if (combat.skillCooldowns[skillId] > 0) {
+      combat.skillCooldowns[skillId] = Math.max(0, combat.skillCooldowns[skillId] - dtMs);
+    }
+  }
+  if (combat.autoCastSkills) {
+    for (const skill of getEquippedSkillDefs(state)) {
+      if ((combat.skillCooldowns[skill.id] ?? 0) <= 0) {
+        castSkill(state, skill.id, onEvent);
+      }
+    }
   }
 
   if (combat.pendingHeal > 0) {

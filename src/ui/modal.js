@@ -133,6 +133,40 @@ export function showImportModal(rootEl, { onConfirm }) {
   });
 }
 
+export function showSkillChoiceModal(rootEl, { masteryName, candidates, onChoose }) {
+  const content = document.createElement('div');
+
+  const hint = document.createElement('p');
+  hint.className = 'modal-hint';
+  hint.textContent = `${masteryName} 숙련도가 올라 새 스킬을 배울 수 있습니다. 하나를 선택하세요 (선택하지 않은 스킬은 이 캐릭터에서 다시 배울 수 없습니다).`;
+  content.appendChild(hint);
+
+  const list = document.createElement('div');
+  list.className = 'skill-choice-list';
+  for (const skill of candidates) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'skill-choice-card';
+    card.innerHTML = `
+      <div class="skill-choice-card__name">${skill.name}</div>
+      <div class="skill-choice-card__desc">${skill.description}</div>
+      <div class="skill-choice-card__cooldown">쿨다운 ${(skill.cooldownMs / 1000).toFixed(0)}초</div>
+    `;
+    card.addEventListener('click', () => {
+      onChoose(skill.id);
+      closeModal(rootEl);
+    });
+    list.appendChild(card);
+  }
+  content.appendChild(list);
+
+  renderModal(rootEl, {
+    title: '스킬 습득',
+    contentNode: content,
+    actions: [],
+  });
+}
+
 export function showResetConfirmModal(rootEl, { onConfirm }) {
   const content = document.createElement('div');
   const p = document.createElement('p');

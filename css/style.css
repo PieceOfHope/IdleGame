@@ -275,9 +275,16 @@ body {
 
 .control-bar {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.control-bar__toggles {
+  display: flex;
   justify-content: center;
   gap: 14px;
-  padding: 4px 0;
 }
 
 .ctrl-btn {
@@ -297,10 +304,6 @@ body {
   text-align: center;
 }
 
-.ctrl-btn--skill {
-  font-size: 1.5rem;
-}
-
 .ctrl-btn--auto {
   background: var(--color-panel-alt);
   border-color: var(--color-text-muted);
@@ -318,13 +321,56 @@ body {
   50% { box-shadow: 0 0 14px 4px rgba(91, 201, 91, 0.55); }
 }
 
-.ctrl-btn--skill.is-active {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px var(--color-accent-dark);
-}
-
 .ctrl-btn:active {
   transform: scale(0.95);
+}
+
+.control-bar__skills {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.skill-slot {
+  position: relative;
+  min-height: 52px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-panel-alt);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.skill-slot--empty {
+  opacity: 0.3;
+  cursor: default;
+  border-style: dashed;
+}
+
+.skill-slot.is-cooldown {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.skill-slot__cooldown {
+  font-size: 0.65rem;
+  color: var(--color-accent);
+}
+
+.skill-slot:active:not(.skill-slot--empty):not(.is-cooldown) {
+  transform: scale(0.96);
 }
 
 .combat-log {
@@ -635,6 +681,8 @@ body {
   padding: 20px;
   width: 100%;
   max-width: 380px;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .modal-box h2 {
@@ -657,6 +705,47 @@ body {
 .modal-hint {
   font-size: 0.8rem;
   color: var(--color-text-muted);
+}
+
+.skill-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.skill-choice-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  background: var(--color-panel-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.skill-choice-card:hover {
+  border-color: var(--color-accent-dark);
+}
+
+.skill-choice-card__name {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.skill-choice-card__desc {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.skill-choice-card__cooldown {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
 }
 
 .save-textarea {

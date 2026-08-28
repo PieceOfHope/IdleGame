@@ -5,24 +5,36 @@ import { STAT_CONFIG, CHARACTER_BALANCE } from '../config/characterConfig.js';
 import { MASTERY_CONFIG } from '../config/masteryConfig.js';
 import { getMonsterForLevel } from '../config/monsterConfig.js';
 import { PERMANENT_UPGRADE_CONFIG } from '../config/permanentUpgradeConfig.js';
+import { SKILL_CONFIG, SKILL_UNLOCK_LEVELS } from '../config/skillConfig.js';
 
 const SAVE_KEY = 'idle_game_save_v1';
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 6;
 
 function createDefaultCharacterState() {
   const allocatedStatPoints = {};
   for (const stat of STAT_CONFIG) allocatedStatPoints[stat.id] = 0;
 
   const mastery = {};
-  for (const masteryDef of MASTERY_CONFIG) mastery[masteryDef.id] = { totalUses: 0 };
+  const skills = {};
+  for (const masteryDef of MASTERY_CONFIG) {
+    mastery[masteryDef.id] = { totalUses: 0 };
+    skills[masteryDef.id] = { unlockedSkillIds: [] };
+  }
 
-  return { totalExp: 0, allocatedStatPoints, mastery };
+  return { totalExp: 0, allocatedStatPoints, mastery, skills };
 }
 
 function createDefaultCombatState() {
   const monster = getMonsterForLevel(1);
   return {
-    activeStyleId: MASTERY_CONFIG[0].id,
+    activeWeaponId: MASTERY_CONFIG.find((m) => m.category === 'physical').id,
+    activeMagicId: MASTERY_CONFIG.find((m) => m.category === 'magic').id,
+    skillCooldowns: {},
+    autoCastSkills: true,
+    enemyDamageTakenBonusPct: 0,
+    enemyDamageTakenRemainingMs: 0,
+    playerDamageReductionPct: 0,
+    playerDamageReductionRemainingMs: 0,
     monsterLevel: 1,
     highestMonsterLevel: 1,
     farmingMode: false,
@@ -120,14 +132,45 @@ function normalizeState(data) {
     for (const masteryDef of MASTERY_CONFIG) {
       const saved = data.character.mastery?.[masteryDef.id];
       if (saved) state.character.mastery[masteryDef.id].totalUses = Number(saved.totalUses) || 0;
+
+      const savedSkillIds = data.character.skills?.[masteryDef.id]?.unlockedSkillIds;
+      if (Array.isArray(savedSkillIds)) {
+        state.character.skills[masteryDef.id].unlockedSkillIds = savedSkillIds
+          .filter((skillId) => SKILL_CONFIG[masteryDef.id].some((s) => s.id === skillId))
+          .slice(0, SKILL_UNLOCK_LEVELS.length);
+      }
     }
   }
 
   if (data.combat && typeof data.combat === 'object') {
     const savedCombat = data.combat;
-    if (MASTERY_CONFIG.some((m) => m.id === savedCombat.activeStyleId)) {
-      state.combat.activeStyleId = savedCombat.activeStyleId;
+
+    // v6+ : 무기/마법 슬롯이 각각 저장됨. v5 이하 : 단일 activeStyleId만 있었으므로,
+    // 그게 무기였으면 무기 슬롯으로, 마법이었으면 마법 슬롯으로 이어받는다.
+    if (MASTERY_CONFIG.some((m) => m.id === savedCombat.activeWeaponId && m.category === 'physical')) {
+      state.combat.activeWeaponId = savedCombat.activeWeaponId;
+    } else if (MASTERY_CONFIG.some((m) => m.id === savedCombat.activeStyleId && m.category === 'physical')) {
+      state.combat.activeWeaponId = savedCombat.activeStyleId;
     }
+    if (MASTERY_CONFIG.some((m) => m.id === savedCombat.activeMagicId && m.category === 'magic')) {
+      state.combat.activeMagicId = savedCombat.activeMagicId;
+    } else if (MASTERY_CONFIG.some((m) => m.id === savedCombat.activeStyleId && m.category === 'magic')) {
+      state.combat.activeMagicId = savedCombat.activeStyleId;
+    }
+
+    if (typeof savedCombat.autoCastSkills === 'boolean') {
+      state.combat.autoCastSkills = savedCombat.autoCastSkills;
+    }
+    if (savedCombat.skillCooldowns && typeof savedCombat.skillCooldowns === 'object') {
+      const allSkillIds = new Set(Object.values(SKILL_CONFIG).flat().map((s) => s.id));
+      for (const [skillId, remainingMs] of Object.entries(savedCombat.skillCooldowns)) {
+        if (allSkillIds.has(skillId) && Number.isFinite(remainingMs) && remainingMs > 0) {
+          state.combat.skillCooldowns[skillId] = remainingMs;
+        }
+      }
+    }
+    // 버프/디버프 잔여시간(약화·방어 버프)은 수명이 짧은 전투 중 상태라 마이그레이션/불러오기 시 항상 리셋한다.
+
     if (Number.isFinite(savedCombat.monsterLevel) && savedCombat.monsterLevel >= 1) {
       state.combat.monsterLevel = Math.floor(savedCombat.monsterLevel);
     }

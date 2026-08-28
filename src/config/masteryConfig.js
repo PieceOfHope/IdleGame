@@ -16,13 +16,15 @@ export const MASTERY_CONFIG = [
     id: 'bow', name: '활', category: 'physical', bonusPerLevel: 0.01,
     trait: { type: 'critChance', label: '치명타', coefficientPerLevel: 0.005, cap: 0.4, critMultiplier: 1.5 },
   },
+  // 원소마법=직격 버스트, 암흑마법=DOT, 신성마법=회복, 정신마법=흡혈/CC 컨셉에 맞춰 재배정함
+  // (Document/SkillSystemDesign.md 1절 "주의" 참고 - 예전엔 원소=화상, 암흑=흡혈, 정신=약화였음).
   {
     id: 'elemental', name: '원소마법', category: 'magic', bonusPerLevel: 0.01,
-    trait: { type: 'burnDot', label: '화상', coefficientPerLevel: 0.3, durationMs: 3000 },
+    trait: { type: 'critChance', label: '치명타', coefficientPerLevel: 0.005, cap: 0.35, critMultiplier: 1.6 },
   },
   {
     id: 'dark', name: '암흑마법', category: 'magic', bonusPerLevel: 0.01,
-    trait: { type: 'lifesteal', label: '흡혈', coefficientPerLevel: 0.003, cap: 0.2 },
+    trait: { type: 'burnDot', label: '화상', coefficientPerLevel: 0.3, durationMs: 3000 },
   },
   {
     id: 'holy', name: '신성마법', category: 'magic', bonusPerLevel: 0.01,
@@ -30,7 +32,7 @@ export const MASTERY_CONFIG = [
   },
   {
     id: 'mental', name: '정신마법', category: 'magic', bonusPerLevel: 0.01,
-    trait: { type: 'weakenChance', label: '약화', coefficientPerLevel: 0.004, cap: 0.25, reductionPct: 0.3 },
+    trait: { type: 'lifesteal', label: '흡혈', coefficientPerLevel: 0.003, cap: 0.2 },
   },
 ];
 
